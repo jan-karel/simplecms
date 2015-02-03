@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 
 """
+ Main controller
+
  SimpleCMS
  a simplistic, minimal not-so-full stack webframework
 
@@ -46,6 +48,8 @@ if py25:
 if not py3:
     #not yet complete, rewritten
     from simplecms.mail import Mail
+else:
+    from simplecms.mailpy3 import Mail
 
 
 # Fix Python 2.x.
@@ -55,6 +59,7 @@ except NameError: pass
 
 class Storage(dict):
     """
+    This sucks
     Eventually this should replace class Storage but causes memory leak
     because of http://bugs.python.org/issue1469629
     """
@@ -218,7 +223,7 @@ class simplecms:
         return headers
 
     def T(self, woord=False, waarden=False, l=False):
-        if woord:
+        if woor
             return self.translate(woord, waarden, l)
 
     def database(self, cdn=False):
@@ -322,7 +327,7 @@ class simplecms:
         sl = str(self.cookie + '=' + self.cookie_value)
 
         self.fingerprint=self.encrypt(authkey[4:12])[12:20]
-
+        #assume sha1 is available every where
         admin = self.encrypt(authkey, algo='sha1')
         self.admin_cookie = admin[0:16]
         self.admin_cookie_value = self.encrypt(self.cookie_salt + admin)
@@ -1109,6 +1114,7 @@ def get_folder():
     folder = os.path.abspath(p[0])
     sys.path.append(folder)
     return folder
+
 
 memory = Memory()
 memory.folder = get_folder()
