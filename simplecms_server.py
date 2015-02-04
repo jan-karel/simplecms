@@ -1019,8 +1019,7 @@ def server(environ, start_response):
     """
     if [k for k in memory.settings.blacklist if k in uri.lower()]:
         status = '403 forbidden'
-        output = serve_file(memory.folder + '/' + memory.appfolder \
-                                               + '/views/system/http/403.html')
+        output = serve_file(memory.folder + '/' + memory.appfolder + '/base/http/403.html')
         start_response(status, [('Content-type', 'text/html'),
                                         ('Content-Length', str(len(output)))])
         return output

@@ -44,7 +44,7 @@ regex_geocode = \
     re.compile(r"""<geometry>[\W]*?<location>[\W]*?<lat>(?P<la>[^<]*)</lat>[\W]
 *?<lng>(?P<lo>[^<]*)</lng>[\W]*?</location>""")
 
-sleutel = str(uuid.uuid5(uuid.NAMESPACE_DNS, uuid.getnode()))
+sleutel = str(uuid.uuid5(uuid.NAMESPACE_DNS, str(uuid.getnode()) ))
 
 EXT_TYPE = {
     '.load': 'text/html',
@@ -62,8 +62,7 @@ EXT_TYPE = {
     '.der': 'application/x-x509-ca-cert',
     '.doc': 'application/msword',
     '.docbook': 'application/docbook+xml',
-    '.docx': \
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     '.dtd': 'application/xml-dtd',
     '.epub': 'application/epub+zip',
     '.flv': 'video/x-flv',
@@ -152,7 +151,7 @@ config = {
 
 
 def default_config():
-    return str(config)
+    return config
 
 def extension(filename, default='text/html'):
     """
