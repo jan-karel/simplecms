@@ -109,12 +109,8 @@ class Memory(Storage):
         self.now = datetime.datetime.now()
         self.utcnow = datetime.datetime.utcnow()
         self.language = Storage()
-        self.cdn_string = None
-        self.gae_cdn_string = None
-        self.appfolder = 'application'
         self.hits = 0
-        self.folder = ''
-        self.secure = 'simplecms'
+
 
     def clear_mem(self):
         tot = len(self.cache) + len(self.view)
@@ -167,6 +163,8 @@ class Memory(Storage):
                 self.appfolder = v
             elif k == 'migrate':
                 self.migrate = v
+            elif k == 'base_template':
+                self.base_template = v
             elif k == 'migrate':
                 self.fake_migrate = v
             elif k == 'secure':
@@ -239,6 +237,10 @@ class simplecms:
         if not self.db and not cdn and not hasattr(self.db, '_tables'):
             self.field = Field
             if not self.request.env.get('APPENGINE_RUNTIME', False):
+                #check if exsist else create directory
+                if not os.path.exists(self.dbpath + '/database'):
+                    os.makedirs(self.dbpath + '/database')
+
                 self.db = DAL(cdn or self.memory.cdn_string, folder=self.dbpath + '/database', migrate=self.memory.migrate, fake_migrate=self.memory.fake_migrate)
                 self.gae = False
             else:
@@ -1019,7 +1021,7 @@ def server(environ, start_response):
     """
     if [k for k in memory.settings.blacklist if k in uri.lower()]:
         status = '403 forbidden'
-        output = serve_file(memory.folder + '/' + memory.appfolder + '/views/base/http/403.html')
+        output = serve_file(memory.folder + '/' + memory.appfolder + '/views/' + memory.base_template + '/http/403.html')
         start_response(status, [('Content-type', 'text/html'),
                                         ('Content-Length', str(len(output)))])
         return output
@@ -1064,10 +1066,9 @@ def server(environ, start_response):
     if output == '404':
         status = '404 not found'
         ext = 'text/html'
-        output = serve_file(memory.folder + '/' + memory.appfolder + '/views/base/http/404.html')
+        output = serve_file(memory.folder + '/' + memory.appfolder + '/views/' + memory.base_template + '/http/404.html')
     elif output == 'redirect':
-        status = '307 redirect'
-        output = serve_file(memory.folder + '/' + memory.appfolder + '/views/base/http/307.html')
+        output = serve_file(memory.folder + '/' + memory.appfolder + '/views/' + memory.base_template + '/http/307.html')
 
     if not response_headers:
         req = ext.split('/')
