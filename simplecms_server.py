@@ -22,12 +22,12 @@ import gc
 import hashlib
 import datetime
 from simplecms.template import TemplateParser
-from simplecms.helpers import echo, serve_file, literal_evil, parse_qsl, \
+from simplecms.helpers import echo, serve_file, default_config, literal_evil, parse_qsl, \
                   timeparts, fetch_url, cookiedate, extension, Tools, HTML, tag
 from simplecms.dal import BaseAdapter, DAL, Field
 from simplecms.vorm import vorm_validate, Vorm
 from simplecms.grid import Grid
-import simplecms.httpagentparser as httpagent
+#import simplecms.httpagentparser as httpagent
 from wsgiref import simple_server
 import traceback
 
@@ -154,7 +154,10 @@ class Memory(Storage):
 
 
     def config(self, waarde):
-        opt = literal_evil(waarde)
+        if waarde == '404':
+            opt = default_config()
+        else:
+            opt = literal_evil(waarde)
         for k, v in opt.items():
             if k == 'cdn_string':
                 self.cdn_string = v
@@ -223,7 +226,7 @@ class simplecms:
         return headers
 
     def T(self, woord=False, waarden=False, l=False):
-        if woor
+        if woord:
             return self.translate(woord, waarden, l)
 
     def database(self, cdn=False):
@@ -233,7 +236,7 @@ class simplecms:
             if not self.request.env.get('APPENGINE_RUNTIME', False):
                 self.db = DAL(cdn or self.memory.cdn_string, \
         folder=self.memory.folder + '/' + self.memory.appfolder + '/database', 
-            ƒmigrate=self.memory.migrate, fake_migrate=self.memory.fake_migrate)
+            migrate=self.memory.migrate, fake_migrate=self.memory.fake_migrate)
                 self.gae = False
             else:
                 self.db = DAL(self.memory.gae_cdn_string)
@@ -315,7 +318,7 @@ class simplecms:
         userkey.update(_(environ.get('HTTP_ACCEPT_LANGUAGE', self.lang)))
         userkey.update(_(environ.get('REMOTE_ADDR', zout)))
 
-        self.stats = httpagent.detect(environ.get('HTTP_USER_AGENT'))
+        #self.stats = httpagent.detect(environ.get('HTTP_USER_AGENT'))
 
         #application management
         #get the url   
@@ -593,7 +596,7 @@ class simplecms:
                     css=self.css, xhtml=self.xhtml, vorm = self.vorm,
                     grid = self.grid, user = self.user, segment = self.segment,
                     get_after = self.get_after, post=self.request.post,
-                    model=self.model, encrypt=self.encrypt, old_ie=self.old_ie,
+                    model=self.model, encrypt=self.encrypt,
                     now=self.request.now, get=self.request.vars,
                     )
 

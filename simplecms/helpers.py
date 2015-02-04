@@ -17,6 +17,7 @@
 
 import re
 import datetime
+import uuid
 from time import gmtime, time
 
 try:
@@ -43,6 +44,7 @@ regex_geocode = \
     re.compile(r"""<geometry>[\W]*?<location>[\W]*?<lat>(?P<la>[^<]*)</lat>[\W]
 *?<lng>(?P<lo>[^<]*)</lng>[\W]*?</location>""")
 
+sleutel = str(uuid.uuid5(uuid.NAMESPACE_DNS, uuid.getnode()))
 
 EXT_TYPE = {
     '.load': 'text/html',
@@ -106,6 +108,51 @@ EXT_TYPE = {
     '.zip': 'application/zip'
     }
 
+config = {
+    'version': '0.1',
+    'release': 'preview',
+    'hostname': '',
+    'port': 8888,
+    'log' : True,
+    'company_name' : 'SimpleCMS',
+    'default_application' : 'website',
+    'app_folder' : 'application',
+    'templates': {},
+    'data_model': 'website',
+    'development': 'dev',
+    'worldfolders': {},
+    'cdn_string': 'sqlite://database.db',
+    'migrate': True, 
+    'fake_migrate': True, 
+    'gae_cdn_string': 'gae',
+    'secure': 'management',
+    'secure_controller': 'cms',
+    'algorithm': 'sha512',
+    'salt': sleutel,
+    'cookie_salt': sleutel.split('-')[0],
+    'media_folder': 'static',
+    'dbmedia_folder': 'media',
+    'mailserver': 'smtp.gmail.com:587',
+    'mailsender': 'user@gmail.com',
+    'maillogin': 'user@gmail.com:wachtwoord',
+    'blacklist': ['@','*', '(',')','[',']', '}', '{','+', '<', '>', '&', \
+              '.ini','php', '~','*','.bak', 'wp', ':', '%',';', ',', '__',\
+              'sql', 'cgi','csv','mysql','ftp','_vt','.hta','.bak','pwd'\
+              'w00t', 'pma', 'admin' ],
+    'modules': {},
+    'backend_pages':[('Website','pagina','globe'),('Bestanden','verkenner','picture-o')],
+    'backend_modules': [('Beheer','beheer','cogs')],
+    'language': {'en':'English', 'nl':'Nederlands'},
+    'default_lang': 'en',
+    'sql_lang': True,
+    'server_timestring': '{0}-{1}-{2} {3}:{4}',
+    'server_datestring': '{0}-{1}-{2}',
+
+}
+
+
+def default_config():
+    return str(config)
 
 def extension(filename, default='text/html'):
     """
