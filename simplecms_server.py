@@ -641,7 +641,7 @@ class simplecms:
                 if there are any, login will be shown
 
                 """
-                data = self.view('system/cms/setup_login.html')
+                data = self.view('base/login/setup_login.html')
                 return [self.status, self.headers, data]
             if aanvraag == 'logout':
                 auth=self.model('auth')
@@ -1019,7 +1019,7 @@ def server(environ, start_response):
     """
     if [k for k in memory.settings.blacklist if k in uri.lower()]:
         status = '403 forbidden'
-        output = serve_file(memory.folder + '/' + memory.appfolder + '/base/http/403.html')
+        output = serve_file(memory.folder + '/' + memory.appfolder + '/views/base/http/403.html')
         start_response(status, [('Content-type', 'text/html'),
                                         ('Content-Length', str(len(output)))])
         return output
@@ -1064,11 +1064,10 @@ def server(environ, start_response):
     if output == '404':
         status = '404 not found'
         ext = 'text/html'
-        output = serve_file(memory.folder + '/' + memory.appfolder \
-                                               + '/views/system/http/404.html')
+        output = serve_file(memory.folder + '/' + memory.appfolder + '/views/base/http/404.html')
     elif output == 'redirect':
-        output = serve_file(memory.folder + '/' + memory.appfolder \
-                                               + '/views/system/http/307.html')
+        status = '307 redirect'
+        output = serve_file(memory.folder + '/' + memory.appfolder + '/views/base/http/307.html')
 
     if not response_headers:
         req = ext.split('/')
