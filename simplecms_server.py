@@ -128,16 +128,14 @@ class Memory(Storage):
         #scan language dir
         #fetch files
         #build strings
-        for root, dirs, files in os.walk(self.folder + '/' + self.appfolder \
-                                                               + '/' + folder):
+        for root, dirs, files in os.walk(self.folder + '/' + self.appfolder + '/' + folder):
             for taal in files:
                 if taal.endswith('.lang') and not taal.startswith('__'):
                     try:
                         d = {}
                         c = taal.split('.lang')[0]
 
-                        b = self.folder + '/' + self.appfolder + '/' + folder\
-                                                                   + '/' + taal
+                        b = self.folder + '/' + self.appfolder + '/' + folder + '/' + taal
                         waarde = serve_file(b)
                         opt = literal_evil(waarde)
 
@@ -154,10 +152,12 @@ class Memory(Storage):
 
 
     def config(self, waarde):
-        if waarde == '404':
-            opt = default_config()
-        else:
-            opt = literal_evil(waarde)
+
+        opt = default_config()
+
+        if waarde != '404':
+            opt.update(literal_evil(waarde))
+
         for k, v in opt.items():
             if k == 'cdn_string':
                 self.cdn_string = v
@@ -209,6 +209,11 @@ class simplecms:
             self.domain = False
             self.html = Storage()
             self.data = False
+            self.apppath = self.memory.folder + '/' + self.memory.appfolder
+            if 'dbpath' in self.memory.settings:
+                self.dbpath = self.memory.settings['dbpath']
+            else:
+                self.dbpath = self.apppath
             self.build_request(environ)
 
     def get_headers(self, environ):
@@ -234,20 +239,15 @@ class simplecms:
         if not self.db and not cdn and not hasattr(self.db, '_tables'):
             self.field = Field
             if not self.request.env.get('APPENGINE_RUNTIME', False):
-                self.db = DAL(cdn or self.memory.cdn_string, \
-        folder=self.memory.folder + '/' + self.memory.appfolder + '/database', 
-            migrate=self.memory.migrate, fake_migrate=self.memory.fake_migrate)
+                self.db = DAL(cdn or self.memory.cdn_string, folder=self.dbpath + '/database', migrate=self.memory.migrate, fake_migrate=self.memory.fake_migrate)
                 self.gae = False
             else:
                 self.db = DAL(self.memory.gae_cdn_string)
                 self.gae = True
         else:
-            return DAL(cdn or self.memory.cdn_string, \
-                       folder=self.memory.folder + '/' + self.memory.appfolder\
-                       + '/databases', migrate=False)
+            return DAL(cdn or self.memory.cdn_string, folder=self.dbpath + '/databases', migrate=False)
 
-    def model(self, name=False, path='models', cdn=False, blanc_env=False, \
-                                                                   func=False):
+    def model(self, name=False, path='models', cdn=False, blanc_env=False, func=False):
         if not hasattr(self.db, '_tables'):
             self.database(cdn=cdn)
         if not name:
@@ -401,12 +401,11 @@ class simplecms:
 
         """        
         verzoek = self.url[1:] or 'index.html'
-        if self.url.startswith('/' + self.memory.settings.dbmedia_folder\
-                                                                        + '/'):
+        if self.url.startswith('/' + self.memory.settings.dbmedia_folder + '/'):
             return self.download()
 
         else:      
-            w = self.memory.folder + '/' + self.memory.appfolder + '/world/'
+            w = self.apppath + '/world/'
             #the result
             sttc = self.getfile(w + verzoek)
             if sttc != '404':   
@@ -429,8 +428,7 @@ class simplecms:
 
     def forbidden(self):
         self.status = '403 forbidden'
-        output = serve_file(self.memory.folder \
-                 + '/' + self.memory.appfolder + '/views/system/http/403.html')
+        output = serve_file( self.apppath + '/views/system/http/403.html')
         return output
 
     def getfile(self, getfile):
@@ -446,8 +444,7 @@ class simplecms:
             html = self.memory.view[str(getfile) + view]
         else:
             if not getfile:
-                getfile = self.memory.folder + '/' + self.memory.appfolder \
-                                                        + '/views/' + str(view)
+                getfile = self.apppath + '/views/' + str(view)
             else:
                 getfile = getfile.replace('.', '')
                 getfile = getfile + '/views/' + str(view)
@@ -458,7 +455,7 @@ class simplecms:
 
     def template_parser(self, pagina, path):
         if not path:
-            path = self.memory.folder + '/' + self.memory.appfolder + '/views/'
+            path = self.apppath + '/views/'
         return TemplateParser(pagina, path=path)
 
     def view(self, view, **zargs):
@@ -474,8 +471,8 @@ class simplecms:
         pagina = self.render_view(view=view, getfile=getfile)
         #parse the template
         if not 'getfile' in zargs:
-            getfile = self.memory.folder + '/' + self.memory.appfolder
-        parser = TemplateParser(pagina, path=getfile + '/views/')
+            getfile = self.apppath
+        parser = TemplateParser(pagina, path=self.apppath + '/views/')
         #render the template, added with some functionality
         if not zargs:
             zargs = {}
@@ -498,7 +495,7 @@ class simplecms:
         """
 
         if not 'getfile' in kwargs:
-            getfile = self.memory.folder + '/' + self.memory.appfolder
+            getfile = self.apppath
         parser = self.template_parser(pagina, path=getfile + '/views/')
         if not 'environment' in kwargs:
             return parser.render(self.environment(), **kwargs)
@@ -513,7 +510,7 @@ class simplecms:
 
         """
         if not 'getfile' in kwargs:
-            getfile = self.memory.folder + '/' + self.memory.appfolder
+            getfile = self.apppath
         return serve_file(getfile + '/views/' + pagina)
 
     def commit(self, data):
@@ -531,8 +528,7 @@ class simplecms:
             BaseAdapter.close_all_instances('commit')
         return data
 
-    def load_class(self, module, path='controllers', blanc_env=False, \
-                                                                   func=False):
+    def load_class(self, module, path='controllers', blanc_env=False, func=False):
         """
         Import and loads files, classes
 
@@ -540,8 +536,7 @@ class simplecms:
         try:
             if not blanc_env:
                 blanc_env = dict()
-            ophalen = self.memory.folder + '/' + self.memory.appfolder \
-                                                + '/' + path + '/' + module + '.py'
+            ophalen = self.apppath + '/' + path + '/' + module + '.py'
             exec(serve_file(ophalen), blanc_env)
             if not func and module.title() in blanc_env:
                 q = blanc_env[module.title()]
@@ -619,12 +614,8 @@ class simplecms:
         if userlevel < 100:
             waard = self.cookie + '=' + self.cookie_value + '; Path = /;'
         else:
-            waard = self.admin_cookie + '=' + self.admin_cookie_value\
-                                + '; Path = /; Expires =' \
-                                + self.set_session(duur) + '; HttpOnly; Session;'
-
-        self.headers = [('Content-type', 'text/html'),
-                                 ('Set-Cookie', str(waard))]
+            waard = self.admin_cookie + '=' + self.admin_cookie_value + '; Path = /; Expires =' + self.set_session(duur) + '; HttpOnly; Session;'
+        self.headers = [('Content-type', 'text/html'), ('Set-Cookie', str(waard))]
 
     def create_page(self):
         """
@@ -664,8 +655,7 @@ class simplecms:
                 items.append(x[1])
             if aanvraag and aanvraag in items:
                 
-                e = self.load_class(aanvraag, func=False, \
-                          blanc_env=self.environment(), path='controllers/cms')
+                e = self.load_class(aanvraag, func=False, blanc_env=self.environment(), path='controllers/cms')
                 
                 if hasattr(e, aanvraag.title()) or hasattr(e, '_run'):
                     dmn = e._run()
@@ -680,8 +670,7 @@ class simplecms:
             else:
                 
 
-                e = self.load_class(self.memory.secure_controller, path='controllers/cms',\
-                                                  blanc_env=self.environment())
+                e = self.load_class(self.memory.secure_controller, path='controllers/cms', blanc_env=self.environment())
 
                 if hasattr(e, '_run'):
                     dmn = e._run()
@@ -711,8 +700,7 @@ class simplecms:
         word = hashlib.md5(key.hexdigest()).hexdigest()
         return word
 
-    def send_email(self, email=False, subject=False, message=False, \
-                                                 bcc=False, tls=True):
+    def send_email(self, email=False, subject=False, message=False, bcc=False, tls=True):
         if self.gae:
             mailserver = 'gae'
         else:
@@ -746,8 +734,7 @@ class simplecms:
             try:
                 find = self.memory.language[lang][hash(woord)]
                 if find:
-                    return echo(find.encode('utf8', 'xmlcharrefreplace'), \
-                                                                       waarden)
+                    return echo(find.encode('utf8', 'xmlcharrefreplace'), waarden)
                 else:
                     if self.memory.settings.fix_lang:
                         #self.model('language')
@@ -858,10 +845,8 @@ class simplecms:
         if code == 'show':
             for script in self.javascript_file:
                 if script.startswith('js'):
-                    script = '/' + str(self.memory.settings.media_folder) \
-                                                            + '/' + str(script)
-                e += str(html.script.tag('', _type="text/javascript", \
-                                                                  _src=script))
+                    script = '/' + str(self.memory.settings.media_folder) + '/' + str(script)
+                e += str(html.script.tag('', _type="text/javascript", _src=script))
             if self.javascript_inc:
                 for inc in self.javascript_inc:
                     e2 += inc + '\n'
@@ -885,8 +870,7 @@ class simplecms:
         if code == 'show':
             for script in self.css_file:
                 if script.startswith('css'):
-                    script = '/' + self.memory.settings.media_folder + '/'\
-                                                                       + script
+                    script = '/' + self.memory.settings.media_folder + '/' + script
                 e += str(html.link.tag(_href=str(script), _rel='stylesheet'))
             if self.css_inc:
                 for inc in self.css_inc:
@@ -1130,14 +1114,12 @@ sys.path.append(memory.folder + '/' + memory.appfolder + '/modules')
 
 def start_server(port=memory.settings.port, hostname=memory.settings.hostname):
     pid = os.getpid()
-    echo("SimpleCMS - v{0} - {1}", [memory.settings.version,\
-                                           memory.settings.release], ret=False)
+    echo("SimpleCMS - v{0} - {1}", [memory.settings.version, memory.settings.release], ret=False)
     echo("A fast,stable,secure and minimalistic framework", ret=False)
     echo("Copyright Jan-Karel Visser - all rights are reserved", ret=False)
     echo("Licensed under the LGPL v3", ret=False)
     echo("Serving on port {0}...", [port], ret=False)
-    echo('use "kill -SIGTERM {0}" or ^C to shutdown simplecms or panic', \
-                                                              [pid], ret=False)
+    echo('use "kill -SIGTERM {0}" or ^C to shutdown simplecms or panic', [pid], ret=False)
     httpd = simplecms_server((hostname, port), simplecms_handler)
     httpd.set_app(server)
     httpd.serve_forever()
