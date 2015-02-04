@@ -106,6 +106,7 @@ class Memory(Storage):
         self.data = Storage()
         self.cache = Storage()
         self.view = Storage()
+        self.vuurmuur = Storage()
         self.now = datetime.datetime.now()
         self.utcnow = datetime.datetime.utcnow()
         self.language = Storage()
@@ -1005,6 +1006,7 @@ def server(environ, start_response):
         if len(items) > 1:
             environ['QUERY_STRING'] = items[1]
     #some vars
+    ip = environ['REMOTE_ADDR']
     uri = environ['PATH_INFO']
     ext = extension(uri)
     response_headers = False
@@ -1015,11 +1017,25 @@ def server(environ, start_response):
      block some bogus request
      Todo: move the views to a template
     """
-    if [k for k in memory.settings.blacklist if k in uri.lower()]:
+
+    if ip in memory.vuurmuur and memory.vuurmuur[ip] >= 5:
+        #to many errors from this ip
+        status = '501 Not Implemented'
+        output = serve_file(memory.folder + '/' + memory.appfolder + '/views/' + memory.base_template + '/http/blocked.html')
+        start_response(status, [('Content-type', 'text/html'), ('Content-Length', str(len(output)))])
+
+        #to many errors from this ip
+
+        return output
+
+    elif [k for k in memory.settings.blacklist if k in uri.lower()]:
+        a = {ip: 1}
+        b = memory.vuurmuur
+
+        memory.vuurmuur = dict(a.items() + b.items() + [(k, a[k] + b[k]) for k in set(b) & set(a)])
         status = '403 forbidden'
         output = serve_file(memory.folder + '/' + memory.appfolder + '/views/' + memory.base_template + '/http/403.html')
-        start_response(status, [('Content-type', 'text/html'),
-                                        ('Content-Length', str(len(output)))])
+        start_response(status, [('Content-type', 'text/html'), ('Content-Length', str(len(output)))])
         return output
     else:
         try:

@@ -1,23 +1,35 @@
+#!/bin/env python
+# -*- coding: utf-8 -*-
 
+"""
+ Browser detection
 
+ SimpleCMS
+ a simplistic, minimal not-so-full stack webframework
 
-#'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.93 Safari/537.36'
+ Copyright Jan-Karel Visser - all rights are reserved
+ Licensed under the LGPLv3 (http://www.gnu.org/licenses/lgpl.html)
 
-resultaatstring = {'platform':False,'browser':False, 'mobile':False}
-platform = ['Mac', 'Win','Linux','FreeBSD']
-mobile = ['Android','iPad','iPod','iPhone','PlayBook','BlackBerry','mobi']
-browser = ['Crome','Safari','Opera','Firefox']
+ This program is distributed in the hope that it will be useful, but
+ WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+"""
+
+os = ['Mac', 'Windows', 'Linux', 'BSD']
+mobile = ['Android','iPad', 'iPod', 'iPhone', 'PlayBook', 'BlackBerry', 'mobi']
+browser = ['Crome', 'Safari', 'Opera', 'Firefox']
 
 def detect(browser):
 	d = Browserparser(browser)
 	return d.detect()
 
+
 class Browserparser:
 
 	def __init__(self, browserstring):
 		self.string = browserstring
-		self.gevonden = resultaatstring
-
+		self.gevonden = {'os':False, 'platform':False, 'browser':False, 'mobile':False, 'kernel':False}
 
 	def heeft(self, zoekterm, type):
 		if self.string.find(zoekterm) >1:
@@ -26,9 +38,12 @@ class Browserparser:
 		else:
 			return False
 
+	def dieper(self, start, eind):
+		a = 1
+
 	def detect(self):
-		for x in platform:
-			if self.heeft(x, 'platform'):
+		for x in os:
+			if self.heeft(x, 'os'):
 				a = 1
 				pass
 		for x in browser:
