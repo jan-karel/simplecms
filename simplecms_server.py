@@ -27,7 +27,7 @@ from simplecms.helpers import echo, serve_file, default_config, literal_evil, pa
 from simplecms.dal import BaseAdapter, DAL, Field
 from simplecms.vorm import vorm_validate, Vorm
 from simplecms.grid import Grid
-#import simplecms.httpagentparser as httpagent
+import simplecms.browserparser as httpagent
 from wsgiref import simple_server
 import traceback
 
@@ -320,7 +320,7 @@ class simplecms:
         userkey.update(_(environ.get('HTTP_ACCEPT_LANGUAGE', self.lang)))
         userkey.update(_(environ.get('REMOTE_ADDR', zout)))
 
-        #self.stats = httpagent.detect(environ.get('HTTP_USER_AGENT'))
+        self.stats = httpagent.detect(environ.get('HTTP_USER_AGENT'))
 
         #application management
         #get the url   
@@ -391,9 +391,6 @@ class simplecms:
 
         """
         echo('Console -program', ret=False)
-
-
-
 
     def serve(self):
         """
@@ -579,7 +576,6 @@ class simplecms:
                     #logging
                     print 'hir'
                     return q._run()
-
 
     def environment(self):
         """
