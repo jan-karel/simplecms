@@ -136,10 +136,10 @@ config = {
     'mailserver': 'smtp.gmail.com:587',
     'mailsender': 'user@gmail.com',
     'maillogin': 'user@gmail.com:wachtwoord',
-    'blacklist': ['@','*', '(',')','[',']', '}', '{','+', '<', '>', '&', \
-              '.ini','php', '~','*','.bak', 'wp', ':', '%',';', ',', '__',\
+    'blacklist': ['@','*', '(',')','[',']', '}', '{', '<', '>', \
+              '.ini','php','asp','jsp','jar', '~','*','.bak', 'wp', ':', '%',';', ',', '__',\
               'sql', 'cgi','csv','mysql','ftp','_vt','.hta','.bak','pwd'\
-              'w00t', 'pma', 'admin' ],
+              'w00t', 'pma', 'admin', 'git', 'svn' ],
     'modules': {},
     'backend_pages':[('Website','pagina','globe'),('Bestanden','verkenner','picture-o')],
     'backend_modules': [('Beheer','beheer','cogs')],

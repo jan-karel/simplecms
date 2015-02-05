@@ -62,6 +62,7 @@ class Storage(dict):
     This sucks
     Eventually this should replace class Storage but causes memory leak
     because of http://bugs.python.org/issue1469629
+
     """
     __slots__ = ()
     __setattr__ = dict.__setitem__
@@ -273,6 +274,7 @@ class simplecms:
         self.request.wsgi.run_once = environ.get('wsgi.run_once', False)
         self.request.env = self.get_headers(environ)
         #set the language Accept-Language
+        #note to self, fix it.
         try:
             self.lang = self.request.env['Accept-Language'][0:2].lower()
         except:
@@ -428,7 +430,7 @@ class simplecms:
 
     def forbidden(self):
         self.status = '403 forbidden'
-        output = serve_file( self.apppath + '/views/system/http/403.html')
+        output = serve_file( self.apppath + '/views/'+base_template+'/http/403.html')
         return output
 
     def getfile(self, getfile):
@@ -819,9 +821,9 @@ class simplecms:
             if self.lang == 'cn':
                 return str('zh-CN')
             else:
-                return str(self.lang)
+                return str(self.lang+'-'+self.lang.upper())
         else:
-            return str(self.memory.settings.default_lang)
+            return str(self.memory.settings.default_lang + '-'+ self.memory.settings.default_lang.upper())
 
     def xhtml(self, reqstring='body,html,div,span,a,ul,li,p,h1,h2,h3,h4'):
         """
@@ -1015,7 +1017,8 @@ def server(environ, start_response):
 
     """
      block some bogus request
-     Todo: move the views to a template
+     show idiot filter by to many bad requests
+
     """
 
     if ip in memory.vuurmuur and memory.vuurmuur[ip] >= 5:
@@ -1056,7 +1059,6 @@ def server(environ, start_response):
             if memory.settings.log:
                 try:
                     fout = traceback.format_exc()
-                    print fout
                     output = '404'
                     if app:
                         if not hasattr(app, 'create_ticket'):
@@ -1086,11 +1088,9 @@ def server(environ, start_response):
         req = ext.split('/')
         if [k for k in ['image', 'css', 'javascript'] if k in req]:
             response_headers = [('Content-type', ext),
-            ('Cache-Control', 'public, max-age=290304000'),
-                                     ('Content-Length', str(len(str(output))))]
+            ('Cache-Control', 'public, max-age=290304000'), ('Content-Length', str(len(str(output))))]
         else:
-            response_headers = [('Content-type', ext),
-                                     ('Content-Length', str(len(str(output))))]
+            response_headers = [('Content-type', ext), ('Content-Length', str(len(str(output))))]
 
     start_response(status, response_headers)
     return [_(output)]
