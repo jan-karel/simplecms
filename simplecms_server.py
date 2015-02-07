@@ -570,7 +570,6 @@ class simplecms:
                     return q['index']()
                 except:
                     #logging
-                    print 'hir'
                     return q._run()
 
     def environment(self):
@@ -1116,13 +1115,11 @@ sys.path.append(memory.folder + '/' + memory.appfolder)
 sys.path.append(memory.folder + '/' + memory.appfolder + '/modules')
 
 #overwrite on sys.args request
-if len(sys.argv) == 1:
-    memory.settings.port  = sys.argv[1]
-
 if len(sys.argv) == 2:
-    memory.settings.hostname  = sys.argv[2]
-
-
+   memory.settings.port  = int(sys.argv[1])  
+if len(sys.argv) == 3:
+    memory.settings.port  = int(sys.argv[1]) 
+    memory.settings.hostname  = str(sys.argv[2])
 
 
 def start_server(port=memory.settings.port, hostname=memory.settings.hostname):
