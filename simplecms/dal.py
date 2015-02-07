@@ -5318,7 +5318,7 @@ class MongoDBAdapter(NoSQLAdapter):
                     arg = "0x%s" % arg
                 try:
                     arg = int(arg, 0)
-                except ValueError, e:
+                except ValueError as e:
                     raise ValueError(
                             "invalid objectid argument string: %s" % e)
             else:
@@ -6132,7 +6132,7 @@ class IMAPAdapter(NoSQLAdapter):
                 hms = map(int, date_list[3].split(":"))
                 return datetime.datetime(year, month, day,
                     hms[0], hms[1], hms[2]) + add
-            except (ValueError, AttributeError, IndexError), e:
+            except (ValueError, AttributeError, IndexError) as e:
                 LOGGER.error("Could not parse date text: %s. %s" %
                              (date, e))
                 return None
@@ -7929,13 +7929,13 @@ def index():
         db_as_dict = dict(items={}, tables=[], uri=uri, dbname=dbname,
                           db_uid=db_uid,
                           **dict([(k, getattr(self, "_" + k)) for
-                          k in 'pool_size','folder','db_codec',
+                          k in ['pool_size','folder','db_codec',
                           'check_reserved','migrate','fake_migrate',
                           'migrate_enabled','fake_migrate_all',
                           'decode_credentials','driver_args',
                           'adapter_args', 'attempts',
                           'bigint_id','debug','lazy_tables',
-                          'do_connect']))
+                          'do_connect']]))
 
         for table in self:
             tablename = str(table)
