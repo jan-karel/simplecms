@@ -209,7 +209,10 @@ class simplecms:
             self.domain = False
             self.html = Storage()
             self.data = False
-            self.apppath = self.memory.folder + '/' + self.memory.appfolder
+            if 'apppath' in self.memory.settings:
+                self.apppath = self.memory.settings['dbpath']
+            else:
+                self.apppath = self.memory.folder + '/' + self.memory.appfolder
             if 'dbpath' in self.memory.settings:
                 self.dbpath = self.memory.settings['dbpath']
             else:
