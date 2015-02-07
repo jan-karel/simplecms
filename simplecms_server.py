@@ -48,8 +48,8 @@ if py25:
 if not py3:
     #not yet complete, rewritten
     from simplecms.mail import Mail
-else:
-    from simplecms.mailpy3 import Mail
+#else:
+#    from simplecms.mailpy3 import Mail
 
 
 # Fix Python 2.x.

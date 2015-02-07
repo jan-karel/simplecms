@@ -347,7 +347,7 @@ if not 'google' in DRIVERS:
         except ImportError:
             try:
                 import contrib.pypyodbc as pyodbc
-            except Exception, e:
+            except Exception as e:
                 raise ImportError(str(e))
         DRIVERS.append('MSSQL(pyodbc)')
         DRIVERS.append('DB2(pyodbc)')
@@ -4342,7 +4342,7 @@ class DatabaseStoredFile:
         try:
             if db.executesql(query):
                 return True
-        except Exception, e:
+        except Exception as e:
             if not (db._adapter.isOperationalError(e) or
                     db._adapter.isProgrammingError(e)):
                 raise
@@ -5617,7 +5617,7 @@ class MongoDBAdapter(NoSQLAdapter):
                     return amount
             else:
                 return amount
-        except Exception, e:
+        except Exception as e:
             # TODO Reverse update query to verifiy that the query succeded
             raise RuntimeError("uncaught exception when updating rows: %s" % e)
 
