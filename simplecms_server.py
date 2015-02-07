@@ -276,21 +276,11 @@ class simplecms:
                                                                          False)
         self.request.wsgi.run_once = environ.get('wsgi.run_once', False)
         self.request.env = self.get_headers(environ)
-        #set the language Accept-Language
-        #note to self, fix it.
+        #set the prefered language from the Accept-Language
         try:
             self.lang = self.request.env['Accept-Language'][0:2].lower()
         except:
             self.lang = self.memory.settings.default_lang
-        if self.lang == 'zh':
-            #later patchen
-            self.lang = 'cn'
-        if self.lang == 'be':
-            #later patchen
-            self.lang = 'nl'
-        if self.lang == 'us':
-            #later patchen
-            self.lang = 'en'
 
         if self.lang not in self.memory.settings.language:
             self.lang = self.memory.settings.default_lang
@@ -645,7 +635,7 @@ class simplecms:
                 if there are any, login will be shown
 
                 """
-                data = self.view('base/login/setup_login.html')
+                data = self.view(memory.base_template + '/login/setup_login.html')
                 return [self.status, self.headers, data]
             if aanvraag == 'logout':
                 auth=self.model('auth')
@@ -1124,6 +1114,15 @@ memory.config(serve_file(memory.folder + '/config.scms'))
 sys.path.append(memory.folder + '/' + memory.appfolder)
 #and another, the modules
 sys.path.append(memory.folder + '/' + memory.appfolder + '/modules')
+
+#overwrite on sys.args request
+if len(sys.argv) == 1:
+    memory.settings.port  = sys.argv[1]
+
+if len(sys.argv) == 2:
+    memory.settings.hostname  = sys.argv[2]
+
+
 
 
 def start_server(port=memory.settings.port, hostname=memory.settings.hostname):
