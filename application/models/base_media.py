@@ -17,11 +17,10 @@
 """
 
 
-class Media:
+class Base_Media:
 
     def __init__(self, SCMS):
         self.app = SCMS
-        self.user = self.app.user()
 
     def get(self):
         return self.app.db((self.scms_cdn.id == self.app.request.arg(1)) & \
@@ -81,7 +80,7 @@ self.scms_cdn.size,self.scms_cdn.via,self.scms_cdn.datum).first()
                         self.app.field("size", 'string'),
                         self.app.field("bes", 'string'),
                         self.app.field("via", 'string'),
-                        self.app.field("gebruiker", 'string', default=self.user.user, writable=False),
+                        self.app.field("gebruiker", 'string', default=-1, writable=False),
                         self.app.field("datum", 'datetime', \
                                                  default=self.app.request.now),
                         self.app.field("uploaded", 'blob', writable=False)

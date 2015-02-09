@@ -18,7 +18,7 @@ support for web2py.
 
 ----------------------------
 some minor changes
-doc: https://jex-jex.appspot.com/user_guide/views.html#template_language
+doc: https://jan-karel.nl/user_guide/views.html#template_language
 
 """
 

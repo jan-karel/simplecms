@@ -42,6 +42,12 @@ class Browserparser:
 		a = 1
 
 	def detect(self):
+		
+		for x in mobile:
+			if self.heeft(x, 'mobile'):
+				a = 1 
+				pass
+
 		for x in os:
 			if self.heeft(x, 'os'):
 				a = 1
@@ -51,8 +57,5 @@ class Browserparser:
 				a = 1
 				pass
 
-		for x in mobile:
-			if self.heeft(x, 'mobile'):
-				a = 1 
-				pass
+
 		return self.gevonden

@@ -104,23 +104,9 @@ class Memory(Storage):
     def __init__(self):
         Storage.__init__(self)
         self.settings = Storage()
-        self.data = Storage()
-        self.cache = Storage()
-        self.view = Storage()
         self.vuurmuur = Storage()
-        self.now = datetime.datetime.now()
-        self.utcnow = datetime.datetime.utcnow()
         self.language = Storage()
         self.hits = 0
-
-
-    def clear_mem(self):
-        tot = len(self.cache) + len(self.view)
-        for key in self.cache:
-                self.cache[key] = False
-        for key in self.view:
-                self.view[key] = False
-        return tot
 
     def load_languages(self, folder='languages', extend=False):
         #scan language dir
@@ -185,7 +171,7 @@ class simplecms:
         if environ and memory:
             self.request = Request()
             self.memory = memory
-            self.memory.hits = self.memory.hits + 1
+            self.memory.hits = self.memory.hits + 1  #increment the total hits, since uptime
             self.headers = False
             self.post_vars = False
             self.query = False
@@ -220,6 +206,10 @@ class simplecms:
             self.build_request(environ)
 
     def get_headers(self, environ):
+        """
+        Extracts the requested headers
+
+        """
         headers = {}
         for k in environ:
                 if k.startswith('HTTP_'):
@@ -230,12 +220,11 @@ class simplecms:
         headers['REMOTE_HOST'] = environ.get('REMOTE_HOST', '')
         #for detecting appengine
         headers['APPENGINE_RUNTIME'] = environ.get('APPENGINE_RUNTIME', '')
+        #our path
         headers['PATH_INFO'] = environ.get('PATH_INFO', '')
-        return headers
 
-    def T(self, woord=False, waarden=False, l=False):
-        if woord:
-            return self.translate(woord, waarden, l)
+        #TODO check csrf header
+        return headers
 
     def database(self, cdn=False):
         #init a connection with a database
@@ -255,18 +244,31 @@ class simplecms:
             return DAL(cdn or self.memory.cdn_string, folder=self.dbpath + '/databases', migrate=False)
 
     def model(self, name=False, path='models', cdn=False, blanc_env=False, func=False):
+        """
+        The database and logic
+
+        """
         if not hasattr(self.db, '_tables'):
             self.database(cdn=cdn)
         if not name:
             name = self.memory.settings.data_model
         try:
-            q_model = self.load_class(name, path, blanc_env, func)
+            if name.starts('Base_'):
+                q_model = self.load_class(name, path, blanc_env, func, forcepath=self.memory.folder + '/' + self.memory.appfolder)
+            else:
+                q_model = self.load_class(name, path, blanc_env, func)
             q_model.create_models()
             return q_model
         except:
             return False
 
     def build_request(self, environ):
+        """
+
+
+        Very ugly but effective
+
+        """
         #build the request http://www.python.org/dev/peps/pep-0333/
         self.request.wsgi.version = environ.get('wsgi.version', False)
         self.request.wsgi.input = environ.get('wsgi.input', False)
@@ -277,8 +279,14 @@ class simplecms:
         self.request.wsgi.run_once = environ.get('wsgi.run_once', False)
         self.request.env = self.get_headers(environ)
         #set the prefered language from the Accept-Language
+        #
         try:
             self.lang = self.request.env['Accept-Language'][0:2].lower()
+            #if self lang in available languages
+
+            #elif if [2:4] in available languages
+
+            #else force the default
         except:
             self.lang = self.memory.settings.default_lang
 
@@ -309,18 +317,23 @@ class simplecms:
 
         zout = str(self.memory.settings.cookie_salt)
         self.cookie_salt = self.encrypt(zout, algo='sha1')
-        userkey = hashlib.md5()
+        userkey = hashlib.md5() #for speed?, ofcourse not
+        """
+        I'm afraid of quantum computers
+
+        """
         userkey.update(_(self.cookie_salt))
         userkey.update(_(environ.get('SERVER_NAME', zout)))
         userkey.update(_(environ.get('HTTP_USER_AGENT', zout)))
         userkey.update(_(environ.get('HTTP_ACCEPT_LANGUAGE', self.lang)))
         userkey.update(_(environ.get('REMOTE_ADDR', zout)))
+        #set time window
+
+        #check time window
+
+        #detect bruteforce session 
 
         self.stats = httpagent.detect(environ.get('HTTP_USER_AGENT'))
-
-        #application management
-        #get the url   
-        #the user key
         authkey = userkey.hexdigest()
         self.cookie = authkey[0:16]
         self.cookie_value = self.encrypt(self.cookie_salt \
@@ -346,8 +359,10 @@ class simplecms:
 
     def segment(self, wat):
         """
-        Returns the request in parts
-        Counts from modules
+        Fixes shift in self.requests for modules 
+        Returns the request in more logical parts
+        request url /hello/there
+        self.segment(1) will return hello
 
         """
         if self.request.arg(0) and self.request.arg(0) in modules:
@@ -355,38 +370,16 @@ class simplecms:
         else:
             return self.request.arg(int(wat)-1)
 
-    def get_after(self, wat):
-        """
-        returns the part after a segment
-
-        """
-        return self.request.args[wat]
-
-    def get_before(self, wat):
-        """
-        returns the part before a segment
-
-        """
-        return self.request.args[wat]
-
     def user(self):
         """
         Returns an user object, if logged in
         else returns False
         """
         if self.loggedin:
-            user = self.model('auth')
+            user = self.model('base_auth')
             return user.get_user()
         else:
             return False
-
-    def management(self):
-        """
-        SimpleCMS on the console
-
-
-        """
-        echo('Console -program', ret=False)
 
     def serve(self):
         """
@@ -402,61 +395,46 @@ class simplecms:
         else:      
             w = self.apppath + '/world/'
             #the result
-            sttc = self.getfile(w + verzoek)
+            sttc = serve_file(w + verzoek)
             if sttc != '404':   
                 data = self.alt_view(sttc)         
                 return self.commit([self.status, self.headers, data])
             else:
                 return self.create_page()
 
-
-    def serve_file(self, req, folder=False):
-        return serve_file(folder + '/' + req)
-
     def download(self):
-        file = self.model('media')
-        data = file.serve_file()
+        """
+        If we are on GAE
+
+        """
+        bestand = self.model('base_media')
+        data = bestand.serve_file()
         if data:
             return [self.status, self.headers, data]
         else:
             return self.forbidden()
 
     def forbidden(self):
+        """
+        """
         self.status = '403 forbidden'
         output = serve_file( self.apppath + '/views/'+base_template+'/http/403.html')
         return output
 
-    def getfile(self, getfile):
-        return serve_file(getfile)
-
     def render_view(self, view='404.html', getfile=False):
         """
-        In production we are caching views
+        Fetches the raw HTML temlate from the given directory
 
         """
-        if self.memory.view[str(getfile) + view] and \
-                              self.memory.settings.development == 'production':
-            html = self.memory.view[str(getfile) + view]
+        if not getfile:
+            getfile = self.apppath + '/views/' + str(view)
         else:
-            if not getfile:
-                getfile = self.apppath + '/views/' + str(view)
-            else:
-                getfile = getfile.replace('.', '')
-                getfile = getfile + '/views/' + str(view)
-            html = serve_file(getfile)
-            if self.memory.settings.development == 'production':
-                    self.memory.view[str(getfile) + view] = html
-        return html
-
-    def template_parser(self, pagina, path):
-        if not path:
-            path = self.apppath + '/views/'
-        return TemplateParser(pagina, path=path)
+            getfile = getfile.replace('.', '') + '/views/' + str(view)
+        return serve_file(getfile)
 
     def view(self, view, **zargs):
         """
         returns a generated view
-        environment, getfile and commit are reserved vars
         doc: https://jan-karel.nl/simplecms/views.html#view
 
         """
@@ -491,7 +469,7 @@ class simplecms:
 
         if not 'getfile' in kwargs:
             getfile = self.apppath
-        parser = self.template_parser(pagina, path=getfile + '/views/')
+        parser = TemplateParser(pagina, path=getfile + '/views/')
         if not 'environment' in kwargs:
             return parser.render(self.environment(), **kwargs)
         else:
@@ -523,7 +501,7 @@ class simplecms:
             BaseAdapter.close_all_instances('commit')
         return data
 
-    def load_class(self, module, path='controllers', blanc_env=False, func=False):
+    def load_class(self, module, path='controllers', blanc_env=False, func=False, forcepath=self.apppath):
         """
         Import and loads files, classes
 
@@ -531,7 +509,7 @@ class simplecms:
         try:
             if not blanc_env:
                 blanc_env = dict()
-            ophalen = self.apppath + '/' + path + '/' + module + '.py'
+            ophalen = forcepath + '/' + path + '/' + module + '.py'
             exec(serve_file(ophalen), blanc_env)
             if not func and module.title() in blanc_env:
                 q = blanc_env[module.title()]
@@ -685,6 +663,9 @@ class simplecms:
             return self.commit([self.status, self.headers, uitvoer])
 
     def create_password(self, email=False, password=False):
+        """
+
+        """
         hashed = hashlib.sha1(str(self.memory.settings.salt)).hexdigest()
         key = hashlib.new(self.memory.settings.algorithm)
         key.update(hashed)
@@ -708,17 +689,27 @@ class simplecms:
         return self.mail.send(email, subject, message, bcc=bcc)
 
     def create_ticket(self, ticket=None, data=None):
+        """
+        Logs error messages to the database
+
+        """
         ticket = self.model('base_tickets')
         ticket.add_ticket(refer=ticket, message=data)
 
-    def audit_trail(self, level=None, data=None):
-        audit = self.model('auth')
-        audit.add_audit(level=level, bericht=data)
+    def T(self, woord=False, waarden=False, l=False):
+        """
+        Shortcut for translate
+
+        """
+        if woord:
+            return self.translate(woord, waarden, l)
+        return ''
 
     def translate(self, woord, waarden=False, l=False):
         """
         Translates strings if translation is found in memory
         Default language does not get translated
+
         """
         lang = l if l else self.lang              
         if lang == self.memory.settings.default_lang:
@@ -732,7 +723,6 @@ class simplecms:
                     if self.memory.settings.fix_lang:
                         #self.model('language')
                         return echo(woord, waarden)
-
                     else:
                         return echo(woord, waarden)
             except:
@@ -740,14 +730,6 @@ class simplecms:
         else:
             #is there a sh
             return echo(woord, waarden)
-
-    def cache(self, name=None, data=False):
-        if name == None:
-            name = self.is_cached
-        if data:
-            self.memory.cache[name] = [self.status, self.headers, data]
-        else:
-            return self.memory.cache[name]
 
     def encrypt(self, text, algo='md5', get='hexdigest'):
         key = hashlib.new(algo)
@@ -759,8 +741,7 @@ class simplecms:
 
     def redirect(self, location='/'):
         self.status = '307 Temporary Redirect'
-        self.headers = [('Content-type', 'text/html'),
-                        ('Location', location)]
+        self.headers = [('Content-type', 'text/html'), ('Location', location)]
         return 'redirect'
 
     def evil(self, waarde):
@@ -789,6 +770,7 @@ class simplecms:
 
     """
     HTML helpers
+    Need to move to a better place
 
     """
 
@@ -807,16 +789,6 @@ class simplecms:
             else:
                 return ''
 
-    def html_lang(self):
-        #the languae ISO 639-1
-        if self.lang in self.memory.settings.language:
-            if self.lang == 'cn':
-                return str('zh-CN')
-            else:
-                return str(self.lang+'-'+self.lang.upper())
-        else:
-            return str(self.memory.settings.default_lang + '-'+ self.memory.settings.default_lang.upper())
-
     def xhtml(self, reqstring='body,html,div,span,a,ul,li,p,h1,h2,h3,h4'):
         """
         XHTML generator, generates html tags
@@ -831,6 +803,7 @@ class simplecms:
         """
         javascript
         ads requested javascript to the page
+
         """
         e = ''
         e2 = ''
@@ -886,7 +859,8 @@ class simplecms:
         return fetch_url(url)
 
     """
-    geocode
+    Geocode
+    Fetch 
 
     """
 
@@ -896,7 +870,8 @@ class simplecms:
         return self.tools.geocode(waarde)
 
     """
-    Date and time helpers
+    Basic date and time helpers
+
 
     """
 
@@ -905,38 +880,25 @@ class simplecms:
             self.tools = Tools(self)
         return self.tools.prettydate(waarde, dagen)
 
-    def delta(self, days=False, hours=False, seconds=False):
-        """
-        timedelta
-
-        """
-        return datetime.timedelta(days, hours, seconds)
-
-    def datetime(self):
-        return datetime
-
-    def timedelta(self):
-        return datetime.timedelta
-
     def timediff(self, datum, teruggave=False, **kwargs):
         """
         get the difference between current and givven in timedelta
+
         """
         return self.prettydate(datum, dagen=True)
 
     def date(self, datum, teruggave=False):
         return self.time(datum, teruggave, date=True)
 
-    def now(self):
-        return datetime.datetime.now()
-
-    def utcnow(self):
-        return datetime.datetime.utcnow()
-
     def time(self, datum, teruggave=False, **kwargs):
         """
         based on the user language, rebuilds the datetime object
         completly disregarding utc or datetime.now
+
+        _timestr
+        _datestr
+        _diff
+
         """
         wtime = 0
         timestring = False
@@ -1009,7 +971,7 @@ def server(environ, start_response):
 
     """
      block some bogus request
-     show idiot filter by to many bad requests
+     show our unimplemented idiot filter by to many bad requests
 
     """
 
@@ -1028,6 +990,7 @@ def server(environ, start_response):
         b = memory.vuurmuur
 
         memory.vuurmuur = dict(a.items() + b.items() + [(k, a[k] + b[k]) for k in set(b) & set(a)])
+        
         status = '403 forbidden'
         output = serve_file(memory.folder + '/' + memory.appfolder + '/views/' + memory.base_template + '/http/403.html')
         start_response(status, [('Content-type', 'text/html'), ('Content-Length', str(len(output)))])
