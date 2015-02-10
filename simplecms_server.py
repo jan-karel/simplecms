@@ -51,7 +51,6 @@ if not py3:
 #else:
 #    from simplecms.mailpy3 import Mail
 
-
 # Fix Python 2.x.
 try: input = raw_input
 except NameError: pass
@@ -76,10 +75,9 @@ class Storage(dict):
 
 class Request(Storage):
     """
-    Holds stuff in memory
+    WSGI, Get and Post container
 
     """
-
     def __init__(self):
         Storage.__init__(self)
         self.wsgi = Storage()
@@ -100,7 +98,6 @@ class Memory(Storage):
     Holds stuff in memory
 
     """
-
     def __init__(self):
         Storage.__init__(self)
         self.settings = Storage()
@@ -112,14 +109,14 @@ class Memory(Storage):
         #scan language dir
         #fetch files
         #build strings
-        for root, dirs, files in os.walk(self.folder + '/' + self.appfolder + '/' + folder):
+        for root, dirs, files in os.walk(self.apppath + '/' + folder):
             for taal in files:
                 if taal.endswith('.lang') and not taal.startswith('__'):
                     try:
                         d = {}
                         c = taal.split('.lang')[0]
 
-                        b = self.folder + '/' + self.appfolder + '/' + folder + '/' + taal
+                        b = self.apppath + '/' + folder + '/' + taal
                         waarde = serve_file(b)
                         opt = literal_evil(waarde)
 
@@ -264,8 +261,6 @@ class simplecms:
 
     def build_request(self, environ):
         """
-
-
         Very ugly but effective
 
         """
@@ -281,6 +276,8 @@ class simplecms:
         #set the prefered language from the Accept-Language
         #
         try:
+            #TODO!
+            #obvious this will fail hard without except
             self.lang = self.request.env['Accept-Language'][0:2].lower()
             #if self lang in available languages
 
@@ -318,10 +315,6 @@ class simplecms:
         zout = str(self.memory.settings.cookie_salt)
         self.cookie_salt = self.encrypt(zout, algo='sha1')
         userkey = hashlib.md5() #for speed?, ofcourse not
-        """
-        I'm afraid of quantum computers
-
-        """
         userkey.update(_(self.cookie_salt))
         userkey.update(_(environ.get('SERVER_NAME', zout)))
         userkey.update(_(environ.get('HTTP_USER_AGENT', zout)))
@@ -355,7 +348,6 @@ class simplecms:
         else:
             self.loggedin = False
             self.isadmin = False
-
 
     def segment(self, wat):
         """
@@ -404,7 +396,7 @@ class simplecms:
 
     def download(self):
         """
-        If we are on GAE
+        If we are on GAE, serve images from database
 
         """
         bestand = self.model('base_media')
@@ -416,9 +408,10 @@ class simplecms:
 
     def forbidden(self):
         """
+
         """
         self.status = '403 forbidden'
-        output = serve_file( self.apppath + '/views/'+base_template+'/http/403.html')
+        output = serve_file( self.apppath + '/views/'+memory.base_template+'/http/403.html')
         return output
 
     def render_view(self, view='404.html', getfile=False):
@@ -435,7 +428,6 @@ class simplecms:
     def view(self, view, **zargs):
         """
         returns a generated view
-        doc: https://jan-karel.nl/simplecms/views.html#view
 
         """
         #de view
@@ -460,13 +452,6 @@ class simplecms:
             return data
 
     def alt_view(self, pagina, **kwargs):
-        """
-        parse and returns an object to view
-        environment and getfile are reserved vars
-        doc: https://jan-karel.nl/simplecms/views.html#alt_view
-
-        """
-
         if not 'getfile' in kwargs:
             getfile = self.apppath
         parser = TemplateParser(pagina, path=getfile + '/views/')
@@ -476,23 +461,11 @@ class simplecms:
             return parser.render(kwargs['environment'], **kwargs)
 
     def raw_view(self, pagina, **kwargs):
-        """
-        returns a view
-        getfile is a reserved var
-        doc: https://jan-karel.nl/simplecms/views.html#raw_view
-
-        """
         if not 'getfile' in kwargs:
             getfile = self.apppath
         return serve_file(getfile + '/views/' + pagina)
 
     def commit(self, data):
-        """
-        cleanup database and do some garbage collection
-
-        """
-        # logic to garbage collect after exec, not always, once every 100 requests
-        # taken from web2py 
         global rmeuk 
         rmeuk = ('rmeuk' in globals()) and (rmeuk + 1) % 100 or 0 
         if not rmeuk and not self.post: 
@@ -501,11 +474,9 @@ class simplecms:
             BaseAdapter.close_all_instances('commit')
         return data
 
-    def load_class(self, module, path='controllers', blanc_env=False, func=False, forcepath=self.apppath):
-        """
-        Import and loads files, classes
-
-        """
+    def load_class(self, module, path='controllers', blanc_env=False, func=False, forcepath=False):
+        if not forcepath:
+            forcepath = self.apppath
         try:
             if not blanc_env:
                 blanc_env = dict()
@@ -524,7 +495,6 @@ class simplecms:
         Controller, returns the request handled by class or function
 
         """
-
         if not module:
             #get the first request
             module = self.memory.settings.modules[self.request.args[0]]
@@ -561,14 +531,11 @@ class simplecms:
                     javascript=self.javascript, prettydate = self.prettydate,
                     css=self.css, xhtml=self.xhtml, vorm = self.vorm,
                     grid = self.grid, user = self.user, segment = self.segment,
-                    get_after = self.get_after, post=self.request.post,
+                    post=self.request.post,
                     model=self.model, encrypt=self.encrypt,
                     now=self.request.now, get=self.request.vars,
                     )
 
-    def set_session(self, date=19500):
-        exprires = cookiedate(date)
-        return exprires
 
     def delete_cookie(self, duur=-95000):
         self.status = '307 Temporary Redirect'
@@ -585,7 +552,7 @@ class simplecms:
         if userlevel < 100:
             waard = self.cookie + '=' + self.cookie_value + '; Path = /;'
         else:
-            waard = self.admin_cookie + '=' + self.admin_cookie_value + '; Path = /; Expires =' + self.set_session(duur) + '; HttpOnly; Session;'
+            waard = self.admin_cookie + '=' + self.admin_cookie_value + '; Path = /; Expires =' + cookiedate(duur) + '; HttpOnly; Session;'
         self.headers = [('Content-type', 'text/html'), ('Set-Cookie', str(waard))]
 
     def create_page(self):
@@ -615,7 +582,7 @@ class simplecms:
                 data = self.view(memory.base_template + '/login/setup_login.html')
                 return [self.status, self.headers, data]
             if aanvraag == 'logout':
-                auth=self.model('auth')
+                auth=self.model('base_auth')
                 auth.user_logout(ret=True)
                 return [self.status, self.headers, 'redirect']
 
@@ -721,7 +688,7 @@ class simplecms:
                     return echo(find.encode('utf8', 'xmlcharrefreplace'), waarden)
                 else:
                     if self.memory.settings.fix_lang:
-                        #self.model('language')
+                        self.model('language')
                         return echo(woord, waarden)
                     else:
                         return echo(woord, waarden)
@@ -828,7 +795,7 @@ class simplecms:
     def css(self, code=None, include=None):
         """
         css
-        ads requested javascript to the page
+        ads requested css to the page
         """
         e = ''
         e2 = ''
@@ -836,7 +803,7 @@ class simplecms:
         if code == 'show':
             for script in self.css_file:
                 if script.startswith('css'):
-                    script = '/' + self.memory.settings.media_folder + '/' + script
+                    script = '/' + str(self.memory.settings.media_folder) + '/' + str(script)
                 e += str(html.link.tag(_href=str(script), _rel='stylesheet'))
             if self.css_inc:
                 for inc in self.css_inc:
