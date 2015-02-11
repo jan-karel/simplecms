@@ -261,6 +261,8 @@ class simplecms:
 
     def build_request(self, environ):
         """
+
+
         Very ugly but effective
 
         """
@@ -276,8 +278,6 @@ class simplecms:
         #set the prefered language from the Accept-Language
         #
         try:
-            #TODO!
-            #obvious this will fail hard without except
             self.lang = self.request.env['Accept-Language'][0:2].lower()
             #if self lang in available languages
 
@@ -315,39 +315,72 @@ class simplecms:
         zout = str(self.memory.settings.cookie_salt)
         self.cookie_salt = self.encrypt(zout, algo='sha1')
         userkey = hashlib.md5() #for speed?, ofcourse not
+
         userkey.update(_(self.cookie_salt))
         userkey.update(_(environ.get('SERVER_NAME', zout)))
         userkey.update(_(environ.get('HTTP_USER_AGENT', zout)))
         userkey.update(_(environ.get('HTTP_ACCEPT_LANGUAGE', self.lang)))
         userkey.update(_(environ.get('REMOTE_ADDR', zout)))
+        fingerprint  = userkey.copy()
+        fingerprint = fingerprint.hexdigest()
         #set time window
 
-        #check time window
+        #two predictable keys
+        oldkey  = userkey.copy()
+        zet = self.request.now.year + self.request.now.day + self.request.now.hour + self.request.now.month + 30
+        #previous hour
+        zetoud = self.request.now.year + self.request.now.day + (self.request.now.hour-1) + self.request.now.month +30
 
-        #detect bruteforce session 
+
+        userkey.update(self.encrypt(fingerprint[22:30] + str(zet), algo='sha512'))
+        oldkey.update(self.encrypt(fingerprint[22:30] + str(zetoud), algo='sha512'))
+
+
+        oldauthkey = oldkey.hexdigest()
+        authkey = userkey.hexdigest()
+
 
         self.stats = httpagent.detect(environ.get('HTTP_USER_AGENT'))
-        authkey = userkey.hexdigest()
+        
         self.cookie = authkey[0:16]
+        oldcookie = oldauthkey[0:16]
         self.cookie_value = self.encrypt(self.cookie_salt \
                                          + authkey[16:32])
+        oldcookie_value = self.encrypt(self.cookie_salt \
+                                         + oldauthkey[16:32])
         sl = str(self.cookie + '=' + self.cookie_value)
+        oc = str(oldcookie + '=' + oldcookie_value)
 
-        self.fingerprint=self.encrypt(authkey[4:12])[12:20]
+        self.fingerprint=self.encrypt(fingerprint[4:12])[12:20]
         #assume sha1 is available every where
         admin = self.encrypt(authkey, algo='sha1')
+        oldadmin = self.encrypt(oldauthkey, algo='sha1')
+
         self.admin_cookie = admin[0:16]
+        oldadmin_cookie = oldadmin[0:16]
         self.admin_cookie_value = self.encrypt(self.cookie_salt + admin)
+        oldadmin_cookie_value = self.encrypt(self.cookie_salt + oldadmin)
+        self.admin_cookie = admin[0:16]
         asl = str(self.admin_cookie + '=' + self.admin_cookie_value)
+        oldasl = str(oldadmin_cookie + '=' + oldadmin_cookie_value)
+
+        if self.request.env.get('Cookie'):
         #now lets find out if there's a session active
-        if [k for k in [sl] if k in self.request.env.get('Cookie', [])]:
-            self.loggedin = self.cookie
-        elif [k for k in [asl] if k in self.request.env.get('Cookie', [])]:
-            self.isadmin = self.admin_cookie
-            self.loggedin = self.cookie
-        else:
-            self.loggedin = False
-            self.isadmin = False
+            if [k for k in [sl] if k in self.request.env.get('Cookie', [])]:
+                self.loggedin = self.cookie
+            if [k for k in [oc] if k in self.request.env.get('Cookie', [])]:
+                self.loggedin = self.cookie
+                self.set_cookie(userlevel=1)
+            elif [k for k in [asl] if k in self.request.env.get('Cookie', [])]:
+                self.isadmin = self.admin_cookie
+                self.loggedin = self.cookie
+            elif [k for k in [oldasl] if k in self.request.env.get('Cookie', [])]:
+                self.isadmin = self.admin_cookie
+                self.loggedin = self.cookie
+                self.set_cookie(userlevel=102)
+            else:
+                self.loggedin = False
+                self.isadmin = False
 
     def segment(self, wat):
         """
@@ -548,9 +581,9 @@ class simplecms:
         self.headers = [('Content-type', 'text/html'),
                             ('Set-Cookie', str(waard))]
 
-    def set_cookie(self, userlevel=1, duur=19500):
+    def set_cookie(self, userlevel=1, sduur=19500):
         if userlevel < 100:
-            waard = self.cookie + '=' + self.cookie_value + '; Path = /;'
+            waard = self.cookie + '=' + self.cookie_value + '; Path = /; Expires =' + cookiedate(duur) + '; '
         else:
             waard = self.admin_cookie + '=' + self.admin_cookie_value + '; Path = /; Expires =' + cookiedate(duur) + '; HttpOnly; Session;'
         self.headers = [('Content-type', 'text/html'), ('Set-Cookie', str(waard))]
