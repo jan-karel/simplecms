@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
- Main controller
+ Base
 
  SimpleCMS
  a simplistic, minimal not-so-full stack webframework
@@ -22,8 +22,9 @@ import gc
 import hashlib
 import datetime
 from simplecms.template import TemplateParser
-from simplecms.helpers import echo, serve_file, default_config, literal_evil, parse_qsl, \
-                  timeparts, fetch_url, cookiedate, extension, Tools, HTML, tag
+from simplecms.helpers import echo, serve_file, default_config, HTML, \
+                              parse_qsl, timeparts, fetch_url, Tools, tag, \
+                              extension, cookiedate, literal_evil
 from simplecms.dal import BaseAdapter, DAL, Field
 from simplecms.vorm import vorm_validate, Vorm
 from simplecms.grid import Grid
@@ -36,6 +37,7 @@ app = False
 
 __autor__ = "Jan-Karel Visser"
 __version__ = '0.1'
+__release__ = '0'
 __license__ = 'LGPLv3'
 
 py = sys.version_info
@@ -46,14 +48,13 @@ if py25:
     def bytes(e):
         return str(e)
 if not py3:
-    #not yet complete, rewritten
     from simplecms.mail import Mail
-#else:
-#    from simplecms.mailpy3 import Mail
 
 # Fix Python 2.x.
-try: input = raw_input
-except NameError: pass
+try:
+    input = raw_input
+except NameError:
+    pass
 
 
 class Storage(dict):
@@ -106,17 +107,15 @@ class Memory(Storage):
         self.hits = 0
 
     def load_languages(self, folder='languages', extend=False):
-        #scan language dir
-        #fetch files
-        #build strings
-        for root, dirs, files in os.walk(self.apppath + '/' + folder):
+        pad = self.folder + '/' + self.appfolder + '/' + folder
+        for root, dirs, files in os.walk(pad):
             for taal in files:
                 if taal.endswith('.lang') and not taal.startswith('__'):
                     try:
                         d = {}
                         c = taal.split('.lang')[0]
 
-                        b = self.apppath + '/' + folder + '/' + taal
+                        b = pad + '/' + taal
                         waarde = serve_file(b)
                         opt = literal_evil(waarde)
 
@@ -130,7 +129,6 @@ class Memory(Storage):
                                 self.language[c] = d
                     except:
                         pass
-
 
     def config(self, waarde):
 
@@ -161,14 +159,26 @@ class Memory(Storage):
         self.load_languages()
 
 
-class simplecms:
+class Simplecms:
 
     def __init__(self, environ=False, memory=False):
-        #we need some values :)
+        """
+
+        m = memory
+        r = request
+        h = headers
+        p = post
+        g = get
+        c = css
+        j = javascript
+
+        """
+
+
         if environ and memory:
-            self.request = Request()
-            self.memory = memory
-            self.memory.hits = self.memory.hits + 1  #increment the total hits, since uptime
+            self.r = Request()
+            self.m = memory
+            self.m.hits = self.m.hits + 1 
             self.headers = False
             self.post_vars = False
             self.query = False
@@ -192,12 +202,12 @@ class simplecms:
             self.domain = False
             self.html = Storage()
             self.data = False
-            if 'apppath' in self.memory.settings:
-                self.apppath = self.memory.settings['dbpath']
+            if 'apppath' in self.m.settings:
+                self.apppath = self.m.settings['dbpath']
             else:
-                self.apppath = self.memory.folder + '/' + self.memory.appfolder
-            if 'dbpath' in self.memory.settings:
-                self.dbpath = self.memory.settings['dbpath']
+                self.apppath = self.m.folder + '/' + self.m.appfolder
+            if 'dbpath' in self.m.settings:
+                self.dbpath = self.m.settings['dbpath']
             else:
                 self.dbpath = self.apppath
             self.build_request(environ)
@@ -215,32 +225,38 @@ class simplecms:
         headers['REMOTE_ADDR'] = environ.get('REMOTE_ADDR', '')
         headers['SERVER_NAME'] = environ.get('SERVER_NAME', '')
         headers['REMOTE_HOST'] = environ.get('REMOTE_HOST', '')
-        #for detecting appengine
+        # for detecting appengine
         headers['APPENGINE_RUNTIME'] = environ.get('APPENGINE_RUNTIME', '')
-        #our path
+        # our path
         headers['PATH_INFO'] = environ.get('PATH_INFO', '')
 
-        #TODO check csrf header
+        # TODO check csrf header
         return headers
 
     def database(self, cdn=False):
-        #init a connection with a database
+        # init a connection with a database
         if not self.db and not cdn and not hasattr(self.db, '_tables'):
             self.field = Field
-            if not self.request.env.get('APPENGINE_RUNTIME', False):
-                #check if exsist else create directory
+            if not self.r.env.get('APPENGINE_RUNTIME', False):
+                # check if exsist else create directory
                 if not os.path.exists(self.dbpath + '/database'):
                     os.makedirs(self.dbpath + '/database')
 
-                self.db = DAL(cdn or self.memory.cdn_string, folder=self.dbpath + '/database', migrate=self.memory.migrate, fake_migrate=self.memory.fake_migrate)
+                self.db = DAL(cdn or self.m.cdn_string, 
+                            folder=self.dbpath + '/database', 
+                            migrate=self.m.migrate, 
+                            fake_migrate=self.m.fake_migrate)
                 self.gae = False
             else:
-                self.db = DAL(self.memory.gae_cdn_string)
+                self.db = DAL(self.m.gae_cdn_string)
                 self.gae = True
         else:
-            return DAL(cdn or self.memory.cdn_string, folder=self.dbpath + '/databases', migrate=False)
+            return DAL(cdn or self.m.cdn_string, 
+                        folder=self.dbpath + '/databases', 
+                        migrate=False)
 
-    def model(self, name=False, path='models', cdn=False, blanc_env=False, func=False):
+    def model(self, name=False, path='models', cdn=False, blanc_env=False, 
+              func=False):
         """
         The database and logic
 
@@ -248,12 +264,13 @@ class simplecms:
         if not hasattr(self.db, '_tables'):
             self.database(cdn=cdn)
         if not name:
-            name = self.memory.settings.data_model
+            name = self.m.settings.data_model
+
+        if not blanc_env:
+            blanc_env = self.environment()
         try:
-            if name.starts('Base_'):
-                q_model = self.load_class(name, path, blanc_env, func, forcepath=self.memory.folder + '/' + self.memory.appfolder)
-            else:
-                q_model = self.load_class(name, path, blanc_env, func)
+
+            q_model = self.load_class(name, path, blanc_env, func)
             q_model.create_models()
             return q_model
         except:
@@ -261,58 +278,56 @@ class simplecms:
 
     def build_request(self, environ):
         """
-
-
         Very ugly but effective
 
         """
-        #build the request http://www.python.org/dev/peps/pep-0333/
-        self.request.wsgi.version = environ.get('wsgi.version', False)
-        self.request.wsgi.input = environ.get('wsgi.input', False)
-        self.request.wsgi.errors = environ.get('wsgi.errors', False)
-        self.request.wsgi.multithread = environ.get('wsgi.multithread', False)
-        self.request.wsgi.multiprocess = environ.get('wsgi.multiprocess', \
-                                                                         False)
-        self.request.wsgi.run_once = environ.get('wsgi.run_once', False)
-        self.request.env = self.get_headers(environ)
-        #set the prefered language from the Accept-Language
-        #
+        # build the request http://www.python.org/dev/peps/pep-0333/
+        self.r.wsgi.version = environ.get('wsgi.version', False)
+        self.r.wsgi.input = environ.get('wsgi.input', False)
+        self.r.wsgi.errors = environ.get('wsgi.errors', False)
+        self.r.wsgi.multithread = environ.get('wsgi.multithread', False)
+        self.r.wsgi.multiprocess = environ.get('wsgi.multiprocess', 
+                                                    False)
+        self.r.wsgi.run_once = environ.get('wsgi.run_once', False)
+        self.r.env = self.get_headers(environ)
+        # set the prefered language from the Accept-Language
         try:
-            self.lang = self.request.env['Accept-Language'][0:2].lower()
-            #if self lang in available languages
+            self.lang = self.r.env['Accept-Language'][0:2].lower()
+            # if self lang in available languages
 
-            #elif if [2:4] in available languages
+            # elif if [2:4] in available languages
 
-            #else force the default
+            # else force the default
         except:
-            self.lang = self.memory.settings.default_lang
+            self.lang = self.m.settings.default_lang
 
-        if self.lang not in self.memory.settings.language:
-            self.lang = self.memory.settings.default_lang
-        self.gae = self.request.env.get('APPENGINE_RUNTIME', False)
+        if self.lang not in self.m.settings.language:
+            self.lang = self.m.settings.default_lang
+        self.gae = self.r.env.get('APPENGINE_RUNTIME', False)
         self.url = environ.get('PATH_INFO', '')
-        self.is_cached = hashlib.md5(_(self.url + '_' + self.lang)).hexdigest()
+        cache = _(self.url + '_' + self.lang)
+        self.is_cached = hashlib.md5(cache).hexdigest()
         aanvraag = self.url.split('/')[1:]
         if aanvraag:
             for i, x in enumerate(aanvraag):
-                self.request.args[i] = x
+                self.r.args[i] = x
         if environ.get('REQUEST_METHOD', '') in ('POST', 'PUT') \
-                                 and int(environ.get('CONTENT_LENGTH', False)):
+                        and int(environ.get('CONTENT_LENGTH', False)):
             request_body_size = int(environ.get('CONTENT_LENGTH'))
             invoer = environ['wsgi.input'].read(request_body_size)
             self.post_vars = invoer
             dpost = parse_qsl(invoer)
             self.post = True
             for (k, v) in dpost:
-                self.request.post[k] = v
+                self.r.post[k] = v
 
         dget = parse_qsl(environ.get('QUERY_STRING', ''))
 
         if dget:
             for (key, value) in dget:
-                self.request.vars[key] = value
+                self.r.vars[key] = value
 
-        zout = str(self.memory.settings.cookie_salt)
+        zout = str(self.m.settings.cookie_salt)
         self.cookie_salt = self.encrypt(zout, algo='sha1')
         userkey = hashlib.md5() #for speed?, ofcourse not
 
@@ -323,17 +338,22 @@ class simplecms:
         userkey.update(_(environ.get('REMOTE_ADDR', zout)))
         fingerprint  = userkey.copy()
         fingerprint = fingerprint.hexdigest()
-        #set time window
+        # set time window
 
-        #two predictable keys
+        # two predictable keys
         oldkey  = userkey.copy()
-        zet = self.request.now.year + self.request.now.day + self.request.now.hour + self.request.now.month + 30
-        #previous hour
-        zetoud = self.request.now.year + self.request.now.day + (self.request.now.hour-1) + self.request.now.month +30
+        tijdplus = self.r.now.year + self.r.now.day \
+                 + self.r.now.hour + self.r.now.month
+        tijdmin = self.r.now.year + self.r.now.day \
+                 + (self.r.now.hour-1) + self.r.now.month
+
+        zet = fingerprint[22:30] + str(tijdplus + 30)
+        # previous hour
+        zetoud = fingerprint[22:30] + str(tijdmin +30)
 
 
-        userkey.update(self.encrypt(fingerprint[22:30] + str(zet), algo='sha512'))
-        oldkey.update(self.encrypt(fingerprint[22:30] + str(zetoud), algo='sha512'))
+        userkey.update(self.encrypt(zet, algo='sha1'))
+        oldkey.update(self.encrypt(zetoud, algo='sha1'))
 
 
         oldauthkey = oldkey.hexdigest()
@@ -352,7 +372,7 @@ class simplecms:
         oc = str(oldcookie + '=' + oldcookie_value)
 
         self.fingerprint=self.encrypt(fingerprint[4:12])[12:20]
-        #assume sha1 is available every where
+        # assume sha1 is available every where
         admin = self.encrypt(authkey, algo='sha1')
         oldadmin = self.encrypt(oldauthkey, algo='sha1')
 
@@ -362,19 +382,19 @@ class simplecms:
         oldadmin_cookie_value = self.encrypt(self.cookie_salt + oldadmin)
         self.admin_cookie = admin[0:16]
         asl = str(self.admin_cookie + '=' + self.admin_cookie_value)
-        oldasl = str(oldadmin_cookie + '=' + oldadmin_cookie_value)
+        bsl = str(oldadmin_cookie + '=' + oldadmin_cookie_value)
 
-        if self.request.env.get('Cookie'):
-        #now lets find out if there's a session active
-            if [k for k in [sl] if k in self.request.env.get('Cookie', [])]:
+        if self.r.env.get('Cookie'):
+        # now lets find out if there's a session active
+            if [k for k in [sl] if k in self.r.env.get('Cookie', [])]:
                 self.loggedin = self.cookie
-            if [k for k in [oc] if k in self.request.env.get('Cookie', [])]:
+            if [k for k in [oc] if k in self.r.env.get('Cookie', [])]:
                 self.loggedin = self.cookie
                 self.set_cookie(userlevel=1)
-            elif [k for k in [asl] if k in self.request.env.get('Cookie', [])]:
+            elif [k for k in [asl] if k in self.r.env.get('Cookie', [])]:
                 self.isadmin = self.admin_cookie
                 self.loggedin = self.cookie
-            elif [k for k in [oldasl] if k in self.request.env.get('Cookie', [])]:
+            elif [k for k in [bsl] if k in self.r.env.get('Cookie', [])]:
                 self.isadmin = self.admin_cookie
                 self.loggedin = self.cookie
                 self.set_cookie(userlevel=102)
@@ -390,10 +410,13 @@ class simplecms:
         self.segment(1) will return hello
 
         """
-        if self.request.arg(0) and self.request.arg(0) in modules:
-            return self.request.arg(int(wat)+1)
+
+        modules = self.m.settings.modules
+
+        if self.r.arg(0) and self.r.arg(0) in modules:
+            return self.r.arg(int(wat))
         else:
-            return self.request.arg(int(wat)-1)
+            return self.r.arg(int(wat)-1)
 
     def user(self):
         """
@@ -414,12 +437,12 @@ class simplecms:
 
         """        
         verzoek = self.url[1:] or 'index.html'
-        if self.url.startswith('/' + self.memory.settings.dbmedia_folder + '/'):
+        if self.url.startswith('/' + self.m.settings.dbmedia_folder + '/'):
             return self.download()
 
         else:      
             w = self.apppath + '/world/'
-            #the result
+            # the result
             sttc = serve_file(w + verzoek)
             if sttc != '404':   
                 data = self.alt_view(sttc)         
@@ -440,11 +463,10 @@ class simplecms:
             return self.forbidden()
 
     def forbidden(self):
-        """
-
-        """
+        # serve a 403 page
         self.status = '403 forbidden'
-        output = serve_file( self.apppath + '/views/'+memory.base_template+'/http/403.html')
+        output = serve_file(self.apppath + '/views/' \
+                    + memory.base_template + '/http/403.html')
         return output
 
     def render_view(self, view='404.html', getfile=False):
@@ -463,22 +485,22 @@ class simplecms:
         returns a generated view
 
         """
-        #de view
+        # de view
         if not 'getfile' in zargs:
             getfile = False
         pagina = self.render_view(view=view, getfile=getfile)
-        #parse the template
+        # parse the template
         if not 'getfile' in zargs:
             getfile = self.apppath
         parser = TemplateParser(pagina, path=self.apppath + '/views/')
-        #render the template, added with some functionality
+        # render the template, added with some functionality
         if not zargs:
             zargs = {}
         if not 'environment' in zargs:
             data = parser.render(self.environment(), **zargs)
         else:
             data = parser.render(zargs['environment'], **zargs)
-        #commit!
+        # commit!
         if not 'commit' in zargs:
             return self.commit(data)
         else:
@@ -507,7 +529,8 @@ class simplecms:
             BaseAdapter.close_all_instances('commit')
         return data
 
-    def load_class(self, module, path='controllers', blanc_env=False, func=False, forcepath=False):
+    def load_class(self, module, path='controllers', blanc_env=False, 
+                    func=False, forcepath=False):
         if not forcepath:
             forcepath = self.apppath
         try:
@@ -529,46 +552,47 @@ class simplecms:
 
         """
         if not module:
-            #get the first request
-            module = self.memory.settings.modules[self.request.args[0]]
+            # get the first request
+            module = self.m.settings.modules[self.r.args[0]]
         q = self.load_class(module, blanc_env=self.environment())
 
 
         if hasattr(q, module.title()) or hasattr(q, '_run'):
-            #run as class
+            # run as class
             return q._run()
         else:
-            #run as function
-            segment = 1 if self.request.arg(0) and self.request.arg(0) == module else 0
-            function = self.request.arg(segment) or 'index'
+            # run as function
+            segment = 1 if self.r.arg(0) and self.r.arg(0) == module else 0
+            function = self.r.arg(segment) or 'index'
             functie = function.split('.')[0]
-            #stripout function
+            # stripout function
             if functie in q:
+
                 return q[functie]()
             else:
-                #huf, !?
+                # huf, !?
                 try:
-                    return q['index']()
+                    function = 'index'
+                    return q.index()
                 except:
-                    #logging
                     return q._run()
 
     def environment(self):
         """
-        Returns functions for controllers and views
+        Hello RAM
+
+        Returns global functions for controller, models and views
         doc: https://jan-karel.nl/simplecms/functions.html#environment
 
         """
-        return dict(request=self.request, T=self.T, SCMS=self, db=self.db,
-                    time=self.time, date=self.date, view=self.view,
+        return dict(request=self.r, T=self.T, SCMS=self, db=self.db,
+                    time=self.time, date=self.date,model=self.model,
                     javascript=self.javascript, prettydate = self.prettydate,
-                    css=self.css, xhtml=self.xhtml, vorm = self.vorm,
-                    grid = self.grid, user = self.user, segment = self.segment,
-                    post=self.request.post,
-                    model=self.model, encrypt=self.encrypt,
-                    now=self.request.now, get=self.request.vars,
-                    )
-
+                    css=self.css, xhtml=self.xhtml, segment = self.segment,
+                    grid = self.grid, user = self.user, vorm = self.vorm,
+                    post=self.r.post, validate=self.validate,
+                    now=self.r.now, get=self.r.vars, field=Field,
+                    view=self.view, encrypt=self.encrypt, memory=self.m)
 
     def delete_cookie(self, duur=-95000):
         self.status = '307 Temporary Redirect'
@@ -579,14 +603,18 @@ class simplecms:
             duur = str(self.set_session(duur))
             waard = self.cookie + ' = 1; Path = /; Expires =' + duur + ';'
         self.headers = [('Content-type', 'text/html'),
-                            ('Set-Cookie', str(waard))]
+                        ('Set-Cookie', str(waard))]
 
     def set_cookie(self, userlevel=1, sduur=19500):
         if userlevel < 100:
-            waard = self.cookie + '=' + self.cookie_value + '; Path = /; Expires =' + cookiedate(duur) + '; '
+            waard = self.cookie + '=' + self.cookie_value \
+                + '; Path = /; Expires =' + cookiedate(duur) + '; '
         else:
-            waard = self.admin_cookie + '=' + self.admin_cookie_value + '; Path = /; Expires =' + cookiedate(duur) + '; HttpOnly; Session;'
-        self.headers = [('Content-type', 'text/html'), ('Set-Cookie', str(waard))]
+            waard = self.admin_cookie + '=' + self.admin_cookie_value \
+                + '; Path = /; Expires =' + cookiedate(duur) \
+                + '; HttpOnly; Session;'
+        self.headers = [('Content-type', 'text/html'), 
+                        ('Set-Cookie', str(waard))]
 
     def create_page(self):
         """
@@ -595,16 +623,16 @@ class simplecms:
 
         """
 
-        if self.request.arg(0) and self.request.arg(0) == self.memory.secure:
+        if self.r.arg(0) and self.r.arg(0) == self.m.secure:
             """
             Auth is required to load
 
             """
             
             
-            aanvraag = self.request.arg(1)
-            functie = self.request.arg(2)
-            modul = self.request.arg(3)
+            aanvraag = self.r.arg(1)
+            functie = self.r.arg(2)
+            modul = self.r.arg(3)
 
             if not self.isadmin:
                 """
@@ -612,7 +640,8 @@ class simplecms:
                 if there are any, login will be shown
 
                 """
-                data = self.view(memory.base_template + '/login/setup_login.html')
+                data = self.view(localfolder + '/' + memory.base_template \
+                                + '/login/setup_login.html')
                 return [self.status, self.headers, data]
             if aanvraag == 'logout':
                 auth=self.model('base_auth')
@@ -620,13 +649,14 @@ class simplecms:
                 return [self.status, self.headers, 'redirect']
 
             items = []
-            for x in self.memory.settings.backend_modules:
+            for x in self.m.settings.backend_modules:
                 items.append(x[1])
-            for x in self.memory.settings.backend_pages:
+            for x in self.m.settings.backend_pages:
                 items.append(x[1])
             if aanvraag and aanvraag in items:
                 
-                e = self.load_class(aanvraag, func=False, blanc_env=self.environment(), path='controllers/cms')
+                e = self.load_class(aanvraag, func=False, 
+                        blanc_env=self.environment(), path='controllers/cms')
                 
                 if hasattr(e, aanvraag.title()) or hasattr(e, '_run'):
                     dmn = e._run()
@@ -641,7 +671,8 @@ class simplecms:
             else:
                 
 
-                e = self.load_class(self.memory.secure_controller, path='controllers/cms', blanc_env=self.environment())
+                e = self.load_class(self.m.secure_controller, 
+                        path='controllers/cms', blanc_env=self.environment())
 
                 if hasattr(e, '_run'):
                     dmn = e._run()
@@ -653,38 +684,39 @@ class simplecms:
                         dmn = e['index']()
 
             return self.commit([self.status,  self.headers, dmn])
-        elif self.request.arg(0) and self.request.arg(0) in self.memory.settings.modules:
+        elif self.r.arg(0) and self.r.arg(0) in self.m.settings.modules:
             data = self.controller()
             return self.commit([self.status, self.headers, data])
         else:
-            #run the default application
-            uitvoer = self.controller(self.memory.settings.default_application)
-            #adjust some headers
+            # run the default application
+            uitvoer = self.controller(self.m.settings.default_application)
+            # adjust some headers
             return self.commit([self.status, self.headers, uitvoer])
 
     def create_password(self, email=False, password=False):
         """
 
         """
-        hashed = hashlib.sha1(str(self.memory.settings.salt)).hexdigest()
-        key = hashlib.new(self.memory.settings.algorithm)
+        hashed = hashlib.sha1(str(self.m.settings.salt)).hexdigest()
+        key = hashlib.new(self.m.settings.algorithm)
         key.update(hashed)
         key.update(hashlib.md5(str(hashed + email)).hexdigest())
         key.update(hashlib.sha1(str(hashed + password)).hexdigest())
         word = hashlib.md5(key.hexdigest()).hexdigest()
         return word
 
-    def send_email(self, email=False, subject=False, message=False, bcc=False, tls=True):
+    def send_email(self, email=False, subject=False, message=False, 
+                    bcc=False, tls=True):
         if self.gae:
             mailserver = 'gae'
         else:
-            mailserver = self.memory.settings.mailserver
+            mailserver = self.m.settings.mailserver
         if email and subject and message:
-        #build the string
+        # build the string
             if not hasattr(self.mail, 'send'):
                 self.mail = Mail(server=str(mailserver), \
-                                 sender=str(self.memory.settings.mailsender), \
-                                 login=str(self.memory.settings.maillogin), \
+                                 sender=str(self.m.settings.mailsender), \
+                                 login=str(self.m.settings.maillogin), \
                                  tls=tls)
         return self.mail.send(email, subject, message, bcc=bcc)
 
@@ -708,19 +740,20 @@ class simplecms:
     def translate(self, woord, waarden=False, l=False):
         """
         Translates strings if translation is found in memory
-        Default language does not get translated
+        Default language does not get translated, by the way
 
         """
         lang = l if l else self.lang              
-        if lang == self.memory.settings.default_lang:
+        if lang == self.m.settings.default_lang:
             return echo(woord, waarden)
-        elif woord and self.memory.language[lang]:
+        elif woord and self.m.language[lang]:
             try:
-                find = self.memory.language[lang][hash(woord)]
+                find = self.m.language[lang][hash(woord)]
                 if find:
-                    return echo(find.encode('utf8', 'xmlcharrefreplace'), waarden)
+                    return echo(find.encode('utf8', 'xmlcharrefreplace'), 
+                                waarden)
                 else:
-                    if self.memory.settings.fix_lang:
+                    if self.m.settings.fix_lang:
                         self.model('language')
                         return echo(woord, waarden)
                     else:
@@ -728,7 +761,7 @@ class simplecms:
             except:
                 return echo(woord, waarden)
         else:
-            #is there a sh
+            # is there a sh
             return echo(woord, waarden)
 
     def encrypt(self, text, algo='md5', get='hexdigest'):
@@ -764,8 +797,10 @@ class simplecms:
         return Vorm(app, table, id)
 
     def grid(self, table, fields, q=False, menu=False, extra=False,
-               well=False, path=False, edit=False, search=False, delete=False, new=False, view=False, smart=False):
-        grid = Grid(self, table, fields, q, menu, extra, well, path, edit, search, delete, new, view, smart)
+               well=False, path=False, edit=False, search=False, 
+               delete=False, new=False, view=False, smart=False):
+        grid = Grid(self, table, fields, q, menu, extra, well, path, edit, 
+                    search, delete, new, view, smart)
         return grid.show()
 
     """
@@ -775,7 +810,7 @@ class simplecms:
     """
 
     def class_active(self, home, items=False, req=0):
-        wat = self.request.arg(req)
+        wat = self.r.arg(req)
         if wat:
             wat = wat.replace('.html','')
         if items:
@@ -811,8 +846,10 @@ class simplecms:
         if code == 'show':
             for script in self.javascript_file:
                 if script.startswith('js'):
-                    script = '/' + str(self.memory.settings.media_folder) + '/' + str(script)
-                e += str(html.script.tag('', _type="text/javascript", _src=script))
+                    script = '/' + str(self.m.settings.media_folder) + '/' \
+                            + str(script)
+                e += str(html.script.tag('', _type="text/javascript", 
+                                        _src=script))
             if self.javascript_inc:
                 for inc in self.javascript_inc:
                     e2 += inc + '\n'
@@ -826,17 +863,15 @@ class simplecms:
                 self.javascript_inc.append(code)
 
     def css(self, code=None, include=None):
-        """
-        css
-        ads requested css to the page
-        """
+
         e = ''
         e2 = ''
         html = self.xhtml('link, style')
         if code == 'show':
             for script in self.css_file:
                 if script.startswith('css'):
-                    script = '/' + str(self.memory.settings.media_folder) + '/' + str(script)
+                    script = '/' + str(self.m.settings.media_folder) + '/' \
+                            + str(script)
                 e += str(html.link.tag(_href=str(script), _rel='stylesheet'))
             if self.css_inc:
                 for inc in self.css_inc:
@@ -850,30 +885,13 @@ class simplecms:
             if include not in self.css_inc:
                 self.css_inc.append(code)
 
-    """
-    Fetch
-
-    """
-
     def fetch(self, url):
         return fetch_url(url)
-
-    """
-    Geocode
-    Fetch 
-
-    """
 
     def geocode(self, waarde):
         if not self.tools:
             self.tools = Tools(self)
         return self.tools.geocode(waarde)
-
-    """
-    Basic date and time helpers
-
-
-    """
 
     def prettydate(self, waarde, dagen=False):
         if not self.tools:
@@ -904,12 +922,12 @@ class simplecms:
         timestring = False
         datestring = False
         [year, month, day, hour, seconds, millisec] = timeparts(datum)
-        if self.memory.language[self.lang]:
+        if self.m.language[self.lang]:
             try:
-                timestring = self.memory.language[self.lang][hash('_timestr')]
-                datestring = self.memory.language[self.lang][hash('_datestr')]
+                timestring = self.m.language[self.lang][hash('_timestr')]
+                datestring = self.m.language[self.lang][hash('_datestr')]
                 try:
-                    wtime = int(self.memory.language[self.lang][hash('_diff')])
+                    wtime = int(self.m.language[self.lang][hash('_diff')])
                 except:
                     wtime = 0
             except:
@@ -917,29 +935,25 @@ class simplecms:
                 datestring = False
                 wtime = 0
         if 'date' in kwargs:
-            tstr = datestring or self.memory.settings.server_datestring
+            tstr = datestring or self.m.settings.server_datestring
         else:
-            tstr = timestring or self.memory.settings.server_timestring
+            tstr = timestring or self.m.settings.server_timestring
 
         server = datetime.datetime(year, month, day, hour, seconds, millisec)
-        #need to adjust the time
+        # need to adjust the time
         tijd = server + datetime.timedelta(minutes=wtime)
 
         if teruggave:
             return tijd
         else:
-            #return the string
-            #set the time
+            # return the string
+            # set the time
             [year, month, day, hour, seconds, millisec] = timeparts(tijd)
             if hour < 10:
                 hour = str('0' + str(hour))
             if seconds < 10:
                 seconds = str('0' + str(seconds))
             return echo(tstr, [year, month, day, hour, seconds, millisec])
-
-        #our query language
-
-        
 
 
 class simplecms_server(simple_server.WSGIServer):
@@ -961,7 +975,7 @@ def server(environ, start_response):
         environ['PATH_INFO'] = items[0]
         if len(items) > 1:
             environ['QUERY_STRING'] = items[1]
-    #some vars
+    # some vars
     ip = environ['REMOTE_ADDR']
     uri = environ['PATH_INFO']
     ext = extension(uri)
@@ -978,52 +992,59 @@ def server(environ, start_response):
     if ip in memory.vuurmuur and memory.vuurmuur[ip] >= 5:
         #to many errors from this ip
         status = '501 Not Implemented'
-        output = serve_file(memory.folder + '/' + memory.appfolder + '/views/' + memory.base_template + '/http/blocked.html')
-        start_response(status, [('Content-type', 'text/html'), ('Content-Length', str(len(output)))])
+        pad = localfolder + '/views/' + memory.base_template \
+            + '/http/blocked.html'
+        output = serve_file(pad)
+        start_response(status, [('Content-type', 'text/html'), 
+                                ('Content-Length', str(len(output)))])
 
-        #to many errors from this ip
+        # to many errors from this ip
 
         return output
 
     elif [k for k in memory.settings.blacklist if k in uri.lower()]:
-        a = {ip: 1}
-        b = memory.vuurmuur
 
-        memory.vuurmuur = dict(a.items() + b.items() + [(k, a[k] + b[k]) for k in set(b) & set(a)])
+        if ip in memory.vuurmuur:
+            memory.vuurmuur[ip] = memory.vuurmuur[ip] + 1
+        else:
+            memory.vuurmuur.update({ip: 1})
         
         status = '403 forbidden'
-        output = serve_file(memory.folder + '/' + memory.appfolder + '/views/' + memory.base_template + '/http/403.html')
-        start_response(status, [('Content-type', 'text/html'), ('Content-Length', str(len(output)))])
+        output = serve_file(localfolder + '/views/' \
+                            + memory.base_template + '/http/403.html')
+        start_response(status, [('Content-type', 'text/html'), 
+                                ('Content-Length', str(len(output)))])
         return output
     else:
         try:
-            #static requests
+            # static requests
             if uri.lower() in ['/favicon.ico', '/robots.txt', '/humans.txt']:
                 output = serve_file(memory.folder + '/' + 'static' + uri)
 
             elif uri.startswith('/' + memory.settings.media_folder + '/'):
                 bst = uri.replace('/' + memory.settings.media_folder + '/', '')
                 output = serve_file(memory.folder + '/static/' + str(bst))
-            #output directly + cache
+            # output directly + cache
 
             else:
-                app = simplecms(environ, memory)
+                app = Simplecms(environ, memory)
                 status, response_headers, output = app.serve()
-                #del app
+                # del app
         except:
             if memory.settings.log:
                 try:
                     fout = traceback.format_exc()
+                    print fout
                     output = '404'
                     if app:
                         if not hasattr(app, 'create_ticket'):
-                            app = simplecms(environ, memory)
+                            app = Simplecms(environ, memory)
                     app.create_ticket(ticket=app.encrypt(str(fout)),\
                                   data=fout)
                 except:
                     output = '404'
             else:
-                #testing
+                # testing
                 output = '404'
     """
     if a request returns a simple 404 string we'll show an error page
@@ -1035,27 +1056,28 @@ def server(environ, start_response):
     if output == '404':
         status = '404 not found'
         ext = 'text/html'
-        output = serve_file(memory.folder + '/' + memory.appfolder + '/views/' + memory.base_template + '/http/404.html')
+        output = serve_file(memory.folder + '/' + memory.appfolder \
+                    + '/views/' + memory.base_template + '/http/404.html')
     elif output == 'redirect':
-        output = serve_file(memory.folder + '/' + memory.appfolder + '/views/' + memory.base_template + '/http/307.html')
+        output = serve_file(memory.folder + '/' + memory.appfolder \
+                    + '/views/' + memory.base_template + '/http/307.html')
 
     if not response_headers:
         req = ext.split('/')
         if [k for k in ['image', 'css', 'javascript'] if k in req]:
             response_headers = [('Content-type', ext),
-            ('Cache-Control', 'public, max-age=290304000'), ('Content-Length', str(len(str(output))))]
+                                ('Cache-Control', 'public, max-age=290304000'), 
+                                ('Content-Length', str(len(str(output))))]
         else:
-            response_headers = [('Content-type', ext), ('Content-Length', str(len(str(output))))]
+            response_headers = [('Content-type', ext), 
+                                ('Content-Length', str(len(str(output))))]
 
     start_response(status, response_headers)
     return [_(output)]
 
 
 def _(s, enc='utf8', err='strict'):
-    """
-    Fix mixed encodings, force returning bytes, ignored on 2.5
-
-    """
+    # Fix mixed encodings, force returning bytes, ignored on 2.5
     if isinstance(s, bytes):
         return s
     else:
@@ -1071,13 +1093,12 @@ def get_folder():
 
 memory = Memory()
 memory.folder = get_folder()
+# enforce the local default path
+localfolder = memory.folder + '/applications'
 memory.config(serve_file(memory.folder + '/config.scms'))
-#ad import path
+# ad import path
 sys.path.append(memory.folder + '/' + memory.appfolder)
-#and another, the modules
-sys.path.append(memory.folder + '/' + memory.appfolder + '/modules')
-
-#overwrite on sys.args request
+# overwrite on sys.args request
 if len(sys.argv) == 2:
    memory.settings.port  = int(sys.argv[1])  
 if len(sys.argv) == 3:
@@ -1085,17 +1106,22 @@ if len(sys.argv) == 3:
     memory.settings.hostname  = str(sys.argv[2])
 
 
-def start_server(port=memory.settings.port, hostname=memory.settings.hostname):
+def startserver(port=memory.settings.port, hostname=memory.settings.hostname):
     pid = os.getpid()
-    echo("SimpleCMS - v{0} - {1}", [memory.settings.version, memory.settings.release], ret=False)
+    echo("SimpleCMS - v{0}.{1}", 
+        [__version__, __release__], ret=False)
     echo("A fast,stable,secure and minimalistic framework", ret=False)
-    echo("Copyright Jan-Karel Visser - all rights are reserved", ret=False)
-    echo("Licensed under the LGPL v3", ret=False)
-    echo("Serving on port {0}...", [port], ret=False)
-    echo('use "kill -SIGTERM {0}" or ^C to shutdown simplecms or panic', [pid], ret=False)
+    echo("Copyright {0} - all rights are reserved", 
+        [__autor__], ret=False)
+    echo("Licensed under the {0} license", 
+        [__license__], ret=False)
+    echo("Serving on port {0}...", 
+        [port], ret=False)
+    echo('use "kill -SIGTERM {0}" or ^C to shutdown simplecms', 
+        [pid], ret=False)
     httpd = simplecms_server((hostname, port), simplecms_handler)
     httpd.set_app(server)
     httpd.serve_forever()
 
 if __name__ == '__main__':
-    start_server()
+    startserver()
