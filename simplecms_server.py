@@ -171,7 +171,7 @@ class Simplecms:
         g = get
         c = css
         j = javascript
-
+        etc...
         """
 
 
