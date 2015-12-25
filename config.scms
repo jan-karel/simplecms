@@ -1,0 +1,135 @@
+{
+#system config
+
+#version settings
+'version': '0.1',
+'release': 'preview',
+
+#wsgi settings
+'hostname': '',
+'port': 8055,
+
+#log error tickets
+#traceback get saved in the database as scms_tickets
+#if loggin is true
+'log' : True,
+
+'company_name' : 'SimpleCMS',
+
+#default controller / application to route to
+'default_application' : 'website',
+
+#app folder
+#where the controllers, models and views lives
+'app_folder' : 'application',
+
+'templates': {},
+
+#default data model
+'data_model': 'website',
+
+#views
+#set to production and views are cached in memory
+'development': 'dev',
+
+#pages you would like to behave to receive directory's request
+'worldfolders': {},
+
+#connect with a database
+#
+#sqlite://test.db
+#mysql://user:password@localhost/database
+#postgres://user:password@localhost/database
+#mssql://user:password@host/database
+#firebird://user:password@server:3050/database
+#oracle://user:password@database
+#etc
+
+
+#dbpath ../ voor buiten de dir
+
+
+#'dbpath': '../',
+'cdn_string': 'sqlite://database.db',
+'migrate': True, 
+'fake_migrate': True, 
+
+#SCMS is fully compatible with Google appengine
+#change it if you prefer google sql
+'gae_cdn_string': 'gae',
+
+#secure, this value holds the name of your backend it's strongly recommended
+#to rename this value and NOT use a name like admin, you'll be blocked by
+#by the blacklist if you set it there
+'secure': 'controlpanel',
+'secure_controller': 'cms',
+#algorithm
+#in wich algorithm are passwords stored
+#other algorithms that your OpenSSL library may offer
+#in wich algorithm are passwords stored, md5, sha1 etc
+'algorithm': 'sha512',
+#salt
+#all passwords are salted, unchangeable afterwards
+#salt wil be converted to a sha1 string
+#algortim(hashed(hashed(salted:email):hashed(salted:password)))
+'salt': 'secretstring',
+
+#cookie_salt
+#cookies are salted too in an md5 hash
+'cookie_salt': 'anothersecret',
+
+#media_folder / static files
+'media_folder': 'static',
+#dbmedia_folder / images in database
+'dbmedia_folder': 'media',
+
+#email settings
+#connect with a database
+'mailserver': 'localhost:25',
+#connect with a database
+'mailsender': '',
+#connect with a database
+'maillogin': '',
+
+#blacklist
+#when an request (PATH_INFO) contains one of the magic words or contains one of
+#the values below, the request will be blocked
+'blacklist': ['@','*', '(',')','[',']', '}', '{','+', '<', '>', '&', \
+              '.ini','php', '~','*','.bak','admin', 'wp', ':', '%',';', ',', '__',\
+              'sql', 'cgi','csv','mysql','ftp','_vt','.hta','.bak','pwd'\
+              'w00t', 'pma' ],
+
+#modules
+# usage {name:controller}
+'modules': [],
+
+#backend modules
+#[(name,controller,icon),etc]
+
+'backend_pages':[('Pagina','pagina','pencil'),('Bestanden','verkenner','picture-o')],
+
+#backend modules
+#for superadmins
+# usage {name:controller}
+#'backend_modules':{},
+
+'backend_modules': [('Beheer','beheer','cogs')],
+	
+#available languages
+'language': {'nl':'Nederlands'},
+
+#default languange
+#this is the default language
+'default_lang': 'nl',
+
+#using translations from the database
+#set fix_lang to true to get it added to the database
+
+'sql_lang': True,
+
+#how to display date by default
+#0 is year, month=1 day=2 hour, seccond, milliseconds
+# set _timestr in your language file to change
+'server_timestring': '{0}-{1}-{2} {3}:{4}',
+'server_datestring': '{2}-{1}-{0}',
+}
