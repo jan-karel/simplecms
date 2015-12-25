@@ -377,7 +377,7 @@ class Simplecms:
         authkey = userkey.hexdigest()
 
 
-        self.stats = httpagent.detect(environ.get('HTTP_USER_AGENT'))
+        #self.stats = httpagent.detect(environ.get('HTTP_USER_AGENT'))
         
         self.cookie = _(authkey[0:16])
         oldcookie = _(oldauthkey[0:16])
