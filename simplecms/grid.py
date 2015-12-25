@@ -380,7 +380,7 @@ class Grid:
 
         if template == '404':
             form = f.show() + '<button type="submit" class="btn btn-success bigger pull-right icon-check"> '+self.app.T('Opslaan',l='nl')+'</button>'  
-            self.html.form.add(form, _method="post", _autocomplete="off", action=self.app.url)
+            self.html.form.add(form, _method="post", _autocomple="off", action=self.app.url)
             return self.menu(message, classname) + self.html.form.xml()
         else:
             template = self.app.alt_view(template, form=f)

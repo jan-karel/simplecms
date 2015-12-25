@@ -21,6 +21,8 @@ import sys
 import gc
 import hashlib
 import datetime
+import string
+from random import choice
 from simplecms.template import TemplateParser
 from simplecms.helpers import echo, serve_file, default_config, HTML, \
                               parse_qsl, timeparts, fetch_url, Tools, tag, \
@@ -103,11 +105,13 @@ class Memory(Storage):
         Storage.__init__(self)
         self.settings = Storage()
         self.vuurmuur = Storage()
+        self.csrftoken = Storage()
         self.language = Storage()
+        self.now = datetime.datetime.now()
         self.hits = 0
 
     def load_languages(self, folder='languages', extend=False):
-        pad = self.folder + '/' + self.appfolder + '/' + folder
+        pad = str(self.folder) + '/' + str(self.appfolder) + '/' + str(folder)
         for root, dirs, files in os.walk(pad):
             for taal in files:
                 if taal.endswith('.lang') and not taal.startswith('__'):
@@ -171,15 +175,15 @@ class Simplecms:
         g = get
         c = css
         j = javascript
-        etc...
+
         """
 
 
-        if environ and memory:
+        if memory:
             self.r = Request()
             self.m = memory
             self.m.hits = self.m.hits + 1 
-            self.headers = False
+            self.headers = []
             self.post_vars = False
             self.query = False
             self.db = False
@@ -193,12 +197,14 @@ class Simplecms:
             self.field = False
             self.route = False
             self.stats = False
+            self.protocol = False
             self.javascript_inc = []
             self.javascript_file = []
             self.css_inc = []
             self.css_file = []
             self.tools = False
             self.http = False
+            self.csp = self.csp_nonce()
             self.domain = False
             self.html = Storage()
             self.data = False
@@ -210,7 +216,8 @@ class Simplecms:
                 self.dbpath = self.m.settings['dbpath']
             else:
                 self.dbpath = self.apppath
-            self.build_request(environ)
+            if environ:
+                self.build_request(environ)
 
     def get_headers(self, environ):
         """
@@ -221,6 +228,9 @@ class Simplecms:
         for k in environ:
                 if k.startswith('HTTP_'):
                     e = k[5:].replace('_', '-').title()
+                    headers[e] = environ[k]
+                if k.startswith('SSL_'):
+                    e = k[4:].replace('_', '-').title()
                     headers[e] = environ[k]
         headers['REMOTE_ADDR'] = environ.get('REMOTE_ADDR', '')
         headers['SERVER_NAME'] = environ.get('SERVER_NAME', '')
@@ -268,13 +278,14 @@ class Simplecms:
 
         if not blanc_env:
             blanc_env = self.environment()
-        try:
+        
+        q_model = self.load_class(name, path, blanc_env, func)
 
-            q_model = self.load_class(name, path, blanc_env, func)
+        if hasattr(q_model, 'create_models'):
             q_model.create_models()
             return q_model
-        except:
-            return False
+        else:
+            return q_model
 
     def build_request(self, environ):
         """
@@ -300,6 +311,13 @@ class Simplecms:
             # else force the default
         except:
             self.lang = self.m.settings.default_lang
+
+        #basic
+        self.domain = self.r.env.get('Host')
+        if self.r.env.get('Tls-Sni'):
+            self.protocol = 'https'
+        else:
+            self.protocol = 'http'
 
         if self.lang not in self.m.settings.language:
             self.lang = self.m.settings.default_lang
@@ -362,46 +380,69 @@ class Simplecms:
 
         self.stats = httpagent.detect(environ.get('HTTP_USER_AGENT'))
         
-        self.cookie = authkey[0:16]
-        oldcookie = oldauthkey[0:16]
+        self.cookie = _(authkey[0:16])
+        oldcookie = _(oldauthkey[0:16])
         self.cookie_value = self.encrypt(self.cookie_salt \
-                                         + authkey[16:32])
+                                         + _(authkey[16:32]))
         oldcookie_value = self.encrypt(self.cookie_salt \
-                                         + oldauthkey[16:32])
-        sl = str(self.cookie + '=' + self.cookie_value)
-        oc = str(oldcookie + '=' + oldcookie_value)
+                                         + _(oldauthkey[16:32]))
+        self.cookie_old_value = oldcookie_value
+        sl = str(self.cookie) + '=' + str(self.cookie_value)
+        oc = str(oldcookie) + '=' + str(oldcookie_value)
 
-        self.fingerprint=self.encrypt(fingerprint[4:12])[12:20]
+        self.fingerprint = self.encrypt(fingerprint[4:12])[12:20]
         # assume sha1 is available every where
         admin = self.encrypt(authkey, algo='sha1')
         oldadmin = self.encrypt(oldauthkey, algo='sha1')
 
-        self.admin_cookie = admin[0:16]
-        oldadmin_cookie = oldadmin[0:16]
+        self.admin_cookie = _(admin[0:16])
+        oldadmin_cookie = _(oldadmin[0:16])
         self.admin_cookie_value = self.encrypt(self.cookie_salt + admin)
         oldadmin_cookie_value = self.encrypt(self.cookie_salt + oldadmin)
-        self.admin_cookie = admin[0:16]
-        asl = str(self.admin_cookie + '=' + self.admin_cookie_value)
-        bsl = str(oldadmin_cookie + '=' + oldadmin_cookie_value)
+        self.admin_cookie = _(admin[0:16])
+        asl = str(self.admin_cookie) + '=' + str(self.admin_cookie_value)
+        bsl = str(oldadmin_cookie) + '=' + str(oldadmin_cookie_value)
 
         if self.r.env.get('Cookie'):
         # now lets find out if there's a session active
             if [k for k in [sl] if k in self.r.env.get('Cookie', [])]:
                 self.loggedin = self.cookie
-            if [k for k in [oc] if k in self.r.env.get('Cookie', [])]:
+
+
+                self.set_cookie(userlevel=1)
+            elif self.r.now.minute <=30 and [k for k in [oc] if k in self.r.env.get('Cookie', [])]:
                 self.loggedin = self.cookie
+
+                #update session
+                self.update_session(oldcookie_value)
                 self.set_cookie(userlevel=1)
             elif [k for k in [asl] if k in self.r.env.get('Cookie', [])]:
                 self.isadmin = self.admin_cookie
+
                 self.loggedin = self.cookie
-            elif [k for k in [bsl] if k in self.r.env.get('Cookie', [])]:
+                self.set_cookie(userlevel=101)
+            elif self.r.now.minute <=30 and [k for k in [bsl] if k in self.r.env.get('Cookie', [])]:
                 self.isadmin = self.admin_cookie
+
+                #update session
+                self.update_session(oldadmin_cookie_value)
                 self.loggedin = self.cookie
-                self.set_cookie(userlevel=102)
+                self.set_cookie(userlevel=101)
             else:
                 self.loggedin = False
                 self.isadmin = False
+    """
+    segment functionaliteit
 
+    -before
+    -after
+    -has
+    -int
+    -inarray
+
+
+
+    """
     def segment(self, wat):
         """
         Fixes shift in self.requests for modules 
@@ -411,12 +452,70 @@ class Simplecms:
 
         """
 
-        modules = self.m.settings.modules
+        if int(wat) >=1: 
 
-        if self.r.arg(0) and self.r.arg(0) in modules:
-            return self.r.arg(int(wat))
+            modules = self.m.settings.modules
+            if self.r.arg(0) and self.r.arg(0) in modules:
+                d = self.r.arg(int(wat))
+                if d:
+                    d = d.replace('.html','')
+                    return d
+            else:
+                if self.r.arg(0) == self.m.secure:
+                    d = self.r.arg(int(wat))
+                    if d:
+                        d = d.replace('.html','')
+                        return d
+
+                d = self.r.arg(int(wat)-1)
+                if d:
+                    d = d.replace('.html','')
+            return d
         else:
-            return self.r.arg(int(wat)-1)
+
+            #nul of tekststring
+            return False
+
+    def segment_int(self, wat):
+        """
+        is digit
+
+        """
+        d = self.segment(wat)
+        if d and str(d).isdigit():
+            return d
+        return False
+
+    def segment_inarray(self, wat, lijst=[]):
+        """
+        is inarray
+
+        """
+        d = self.segment(wat)
+        if d and d in lijst:
+            return d
+        return False
+
+    def segment_if(self, wat, heeft):
+        """
+        is inarray
+
+        """
+        d = self.segment(wat)
+        if d and d == heeft:
+            return d
+        return False
+
+    def segment_has(self, wat, heeft):
+        """
+        is inarray
+
+        """
+        d = self.segment(wat)
+        if d and d.find(heeft) >=1:
+            return True
+        return False
+
 
     def user(self):
         """
@@ -426,6 +525,13 @@ class Simplecms:
         if self.loggedin:
             user = self.model('base_auth')
             return user.get_user()
+        else:
+            return False
+
+    def update_session(self, oud):
+        if self.loggedin:
+            user = self.model('base_auth')
+            return user.update_session(oud)
         else:
             return False
 
@@ -516,9 +622,11 @@ class Simplecms:
             return parser.render(kwargs['environment'], **kwargs)
 
     def raw_view(self, pagina, **kwargs):
-        if not 'getfile' in kwargs:
-            getfile = self.apppath
-        return serve_file(getfile + '/views/' + pagina)
+        #quick and dirty
+        path = self.apppath+ '/views/'
+        if 'getfile' in kwargs:
+            path = kwargs['getfile']
+        return serve_file(path + pagina)
 
     def commit(self, data):
         global rmeuk 
@@ -570,12 +678,8 @@ class Simplecms:
 
                 return q[functie]()
             else:
-                # huf, !?
-                try:
-                    function = 'index'
-                    return q.index()
-                except:
-                    return q._run()
+               #fallback 
+               return str('404')
 
     def environment(self):
         """
@@ -589,29 +693,32 @@ class Simplecms:
                     time=self.time, date=self.date,model=self.model,
                     javascript=self.javascript, prettydate = self.prettydate,
                     css=self.css, xhtml=self.xhtml, segment = self.segment,
+                    segment_int = self.segment_int, segment_inarray = self.segment_inarray,
+                    segment_if = self.segment_if,timediff=self.timediff,
                     grid = self.grid, user = self.user, vorm = self.vorm,
                     post=self.r.post, validate=self.validate,
                     now=self.r.now, get=self.r.vars, field=Field,
-                    view=self.view, encrypt=self.encrypt, memory=self.m)
+                    view=self.view, alt_view=self.alt_view, encrypt=self.encrypt, memory=self.m)
 
-    def delete_cookie(self, duur=-95000):
+    def delete_cookie(self, duur=-95000, cookie=False):
         self.status = '307 Temporary Redirect'
         if self.isadmin:
-            waard = self.admin_cookie + ' = 1;' + self.cookie + \
-               ' = 1 ;Path = /; Expires =' + self.set_session(duur) + ';'
+            waard = self.admin_cookie + ' = 1;' + self.cookie \
+                    + ' = 1 ;Path = /; Expires =' + cookiedate(duur) + ';'
         else:
-            duur = str(self.set_session(duur))
-            waard = self.cookie + ' = 1; Path = /; Expires =' + duur + ';'
+            waard = self.cookie + ' = 1; Path = /; Expires =' \
+                    + cookiedate(duur) + ';'
         self.headers = [('Content-type', 'text/html'),
                         ('Set-Cookie', str(waard))]
 
-    def set_cookie(self, userlevel=1, sduur=19500):
+    def set_cookie(self, userlevel=1, sduur=1800):
         if userlevel < 100:
             waard = self.cookie + '=' + self.cookie_value \
-                + '; Path = /; Expires =' + cookiedate(duur) + '; '
+                + '; Path = /; Expires =' + cookiedate(sduur) \
+                + '; HttpOnly; Session;'
         else:
             waard = self.admin_cookie + '=' + self.admin_cookie_value \
-                + '; Path = /; Expires =' + cookiedate(duur) \
+                + '; Path = /; Expires =' + cookiedate(sduur) \
                 + '; HttpOnly; Session;'
         self.headers = [('Content-type', 'text/html'), 
                         ('Set-Cookie', str(waard))]
@@ -640,10 +747,10 @@ class Simplecms:
                 if there are any, login will be shown
 
                 """
-                data = self.view(localfolder + '/' + memory.base_template \
-                                + '/login/setup_login.html')
+                data = self.view( memory.base_template + '/login/setup_login.html')
+
                 return [self.status, self.headers, data]
-            if aanvraag == 'logout':
+            if aanvraag in ['logout','uitloggen']:
                 auth=self.model('base_auth')
                 auth.user_logout(ret=True)
                 return [self.status, self.headers, 'redirect']
@@ -768,9 +875,9 @@ class Simplecms:
         key = hashlib.new(algo)
         key.update(_(text))
         if get == 'hexdigest':
-            return key.hexdigest()
+            return _(key.hexdigest())
         else:
-            return key
+            return _(key)
 
     def redirect(self, location='/'):
         self.status = '307 Temporary Redirect'
@@ -793,8 +900,7 @@ class Simplecms:
         return vorm_validate(wat, waarde)
 
     def vorm(self, table, id=0):
-        app = self
-        return Vorm(app, table, id)
+        return Vorm(self, table, id)
 
     def grid(self, table, fields, q=False, menu=False, extra=False,
                well=False, path=False, edit=False, search=False, 
@@ -809,17 +915,21 @@ class Simplecms:
 
     """
 
-    def class_active(self, home, items=False, req=0):
+    def class_active(self, home, items=False, req=0, f=False):
         wat = self.r.arg(req)
         if wat:
             wat = wat.replace('.html','')
         if items:
             if wat not in items:
+                if f:
+                    return ' active'
                 return ' class="active"'
             else:
                 return ''
         else:
             if wat == home:
+                if f:
+                    return ' active'
                 return ' class="active"'
             else:
                 return ''
@@ -834,26 +944,41 @@ class Simplecms:
                 self.html[name] = HTML(tag[name])
         return self.html
 
+    def csp_nonce(self, lengte=22):
+        return ''.join([choice(string.letters + string.digits) for i in range(int(lengte))])
+
     def javascript(self, code=None, include=None):
         """
         javascript
         ads requested javascript to the page
 
         """
+        zetscripts = "img-src {prot}://* data: blob: ; connect-src {prot}://*; media-src {prot}://* ; object-src {prot}://{domein}/static/ ; default-src 'self' ; font-src {prot}://* data: ; frame-src {prot}://* ; style-src {prot}://* 'unsafe-inline' 'unsafe-eval' ; script-src 'unsafe-eval' 'unsafe-inline' 'self' {prot}://{domein}/ 'nonce-{nonce}' ;"
+        altscripts = "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-src 'self';"
+
         e = ''
         e2 = ''
         html = self.xhtml('script')
         if code == 'show':
+
+            nonce = self.csp.capitalize()
+            cked = '/'+self.m.settings.media_folder+'/editor/ckeditor.js'
+            if cked in self.javascript_file:
+                #relaxes csp header
+                self.headers.append(('Content-Security-Policy', altscripts))
+            else:
+                self.headers.append(('Content-Security-Policy', zetscripts.replace('{nonce}',nonce).replace('{prot}',self.protocol).replace('{domein}',self.domain)))
+
             for script in self.javascript_file:
                 if script.startswith('js'):
                     script = '/' + str(self.m.settings.media_folder) + '/' \
                             + str(script)
-                e += str(html.script.tag('', _type="text/javascript", 
+                e += str(html.script.tag('', _type="text/javascript", _nonce=nonce, 
                                         _src=script))
             if self.javascript_inc:
                 for inc in self.javascript_inc:
                     e2 += inc + '\n'
-                e += str(html.script.tag(e2, _type="text/javascript"))
+                e += str(html.script.tag(e2, _type="text/javascript", _nonce=nonce))
             return e
         elif include:
             if include not in self.javascript_file:
@@ -989,18 +1114,16 @@ def server(environ, start_response):
 
     """
 
-    if ip in memory.vuurmuur and memory.vuurmuur[ip] >= 5:
-        #to many errors from this ip
+    if ip in memory.vuurmuur and memory.vuurmuur[ip] >= 8:
+        #to many errors from this ip, idiot filter not implemented
         status = '501 Not Implemented'
-        pad = localfolder + '/views/' + memory.base_template \
+        pad = memory.folder + '/' + memory.appfolder + '/views/' + memory.base_template \
             + '/http/blocked.html'
         output = serve_file(pad)
-        start_response(status, [('Content-type', 'text/html'), 
-                                ('Content-Length', str(len(output)))])
+        start_response(status, [('Content-type', 'text/html')])
 
         # to many errors from this ip
-
-        return output
+        return [_(output)]
 
     elif [k for k in memory.settings.blacklist if k in uri.lower()]:
 
@@ -1010,31 +1133,31 @@ def server(environ, start_response):
             memory.vuurmuur.update({ip: 1})
         
         status = '403 forbidden'
-        output = serve_file(localfolder + '/views/' \
+        output = serve_file(memory.folder + '/' + memory.appfolder + '/views/' \
                             + memory.base_template + '/http/403.html')
-        start_response(status, [('Content-type', 'text/html'), 
-                                ('Content-Length', str(len(output)))])
-        return output
+        start_response(status, [('Content-type', 'text/html')])
+        return [_(output)]
     else:
         try:
             # static requests
             if uri.lower() in ['/favicon.ico', '/robots.txt', '/humans.txt']:
                 output = serve_file(memory.folder + '/' + 'static' + uri)
-
+                
             elif uri.startswith('/' + memory.settings.media_folder + '/'):
                 bst = uri.replace('/' + memory.settings.media_folder + '/', '')
-                output = serve_file(memory.folder + '/static/' + str(bst))
-            # output directly + cache
+                output = serve_file(memory.folder + '/' + memory.settings.media_folder + '/' + str(bst))
+            # output    directly + cache
 
             else:
                 app = Simplecms(environ, memory)
                 status, response_headers, output = app.serve()
                 # del app
         except:
+            print traceback.format_exc()
             if memory.settings.log:
                 try:
                     fout = traceback.format_exc()
-                    print fout
+                    print(fout)
                     output = '404'
                     if app:
                         if not hasattr(app, 'create_ticket'):
@@ -1065,12 +1188,16 @@ def server(environ, start_response):
     if not response_headers:
         req = ext.split('/')
         if [k for k in ['image', 'css', 'javascript'] if k in req]:
+            
             response_headers = [('Content-type', ext),
-                                ('Cache-Control', 'public, max-age=290304000'), 
-                                ('Content-Length', str(len(str(output))))]
+                                ('Cache-Control', 'public, max-age=290304000')]
+
         else:
-            response_headers = [('Content-type', ext), 
-                                ('Content-Length', str(len(str(output))))]
+            response_headers = [('Content-type', ext)]
+    else:
+        #if not content type in responseheaders
+        response_headers.append(('Content-type', ext))
+
 
     start_response(status, response_headers)
     return [_(output)]
@@ -1094,10 +1221,11 @@ def get_folder():
 memory = Memory()
 memory.folder = get_folder()
 # enforce the local default path
-localfolder = memory.folder + '/applications'
+
 memory.config(serve_file(memory.folder + '/config.scms'))
 # ad import path
 sys.path.append(memory.folder + '/' + memory.appfolder)
+
 # overwrite on sys.args request
 if len(sys.argv) == 2:
    memory.settings.port  = int(sys.argv[1])  

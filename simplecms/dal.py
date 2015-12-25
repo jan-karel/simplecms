@@ -1018,8 +1018,18 @@ class BaseAdapter(ConnectionPool):
                     self.log('success!\n', table)
         else:
             tfile = self.file_open(table._dbt, 'r')
+
             try:
-                sql_fields_old = pickle.load(tfile)
+                if PYTHON_VERSION == 2:
+                   sql_fields_old = pickle.load(tfile)
+                else:
+                  #meuk py 3
+                  #for x in tfile:
+                  #   print(x)
+                  #print(pickle.dumps(tfile))
+                  #unpickle werkt niet dus deze dirty bypass
+                  #grove hack
+                  sql_fields_old = sql_fields
             except EOFError:
                 self.file_close(tfile)
                 raise RuntimeError('File %s appears corrupted' % table._dbt)
@@ -1360,10 +1370,12 @@ class BaseAdapter(ConnectionPool):
         return ftype in ('integer','boolean','double','bigint') or \
             ftype.startswith('decimal')
 
+    """
     def REPLACE(self, first, (second, third)):
         return 'REPLACE(%s,%s,%s)' % (self.expand(first,'string'),
                                       self.expand(second,'string'),
                                       self.expand(third,'string'))
+    """
 
     def CONCAT(self, *items):
         return '(%s)' % ' || '.join(self.expand(x,'string') for x in items)

@@ -28,7 +28,7 @@ vorm_input = '<input type="{type}" id="{id}" name="{name}"{value}{opt}/>'
 vorm_comment = '<small>{comment}</small>'
 vorm_textarea = '<textarea name="{name}" id="{id}"{opt}>{value}</textarea>'
 vorm_html5 = ['email', 'range', 'password', 'datetime', 'date', 'url',
-              'number','upload','image','join', 'alias']
+              'number','upload','image','join', 'alias','datetime-local']
 #sets the input fields
 vorm_valid = {'username': 'text', 'telephone': 'tel'}
 
@@ -40,7 +40,6 @@ def schoon(s):
     s = re.sub('<[^<]+?>', '', s)
     s = s.replace("<", "&lt;")
     s = s.replace(">", "&gt;")
-
     s = s.replace("'", "&#x27;")
     s = s.replace('"', "&quot;")
     try:
@@ -51,6 +50,7 @@ def schoon(s):
 def alias(s):
     s = schoon(s)
     s = s.replace(' ','-')
+    s = s.replace('20','-')
     s = s.replace("&lt;", '')
     s = s.replace("&gt;", '')
     s = s.replace("&#x27;", '')
@@ -91,6 +91,8 @@ def vorm_validate(soort, invoer, options=False):
         "([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})",
         "datetime": \
         "([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})",
+        "datetime-local": \
+        "([0-9]{1,2})-([0-9]{1,2})-([0-9]{4})",
         "time": \
         "([0-1][0-9]|2[0-3]):[0-5][0-9]",
         "alphanumeric": \
@@ -126,8 +128,11 @@ class Vorm:
         self.table = table
         self.veld = ''
         self.plaatje = False
+        self.token = False
+        self.post_token = False
         self.waarden = dict()
         self.form = ''
+        self.auth = self.app.model('base_auth')
         self.postkey = []
         self.javascript = False
         self.upload = False
@@ -135,19 +140,42 @@ class Vorm:
         self.opslaan = {}
         self.valideer = {}
         self.widget = {}
+        self.tokenref = False
+        #zet de no-cache headers
+        self.app.headers.append(('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0'))
+        self.app.headers.append(('Cache-Control', 'post-check=0, pre-check=0'))
+        self.app.headers.append(('Pragma', 'no-cache'))
+
         try:
             self.id = id.split('?')[0]
         except:
             self.id = id
         self.enhanced = False
+        self.csrf_token()
         self.create_form()
+
+    def csrf_token(self):
+        self.token = self.app.csp_nonce(lengte=9)+'-'+self.app.csp_nonce(lengte=6)+'-'+self.app.csp_nonce(lengte=9)
+        self.token = self.token + '-' + self.app.csp_nonce(lengte=12) + '-' + self.app.csp_nonce(lengte=6)
+        if self.app.post:
+            self.post_token = self.app.m.csrftoken.get(self.app.fingerprint)
+        self.app.m.csrftoken[self.app.fingerprint] = False
+        self.app.m.csrftoken.update({self.app.fingerprint:self.token})
+        #vorm_input = '<input type="{type}" id="{id}" name="{name}"{value}{opt}/>'
+        zet = vorm_input.replace('{type}','hidden').replace('{id}','csrftoken').replace('{name}','csrftoken')
+        self.tokenref = zet.replace("{value}{opt}", ' value="'+self.token+'"')
+        self.form = self.tokenref
+
+    def form_csrftoken(self):
+        return self.tokenref
+        #self.app.fingerprint
 
     def fields(self, item):
         #set the id
         #set the label
 
 
-        if item.writable and not item.compute:
+        if item.writable and not item.compute and item.label !='Id':
             tid = str(item)
             tid = tid.split('.')[1]
             self.postkey.append(tid)
@@ -166,31 +194,61 @@ class Vorm:
             if item.widget in vorm_html5:
                 if item.widget == 'image':
                     if not self.plaatje:
-                        self.app.javascript(code="function afbeelding(itd){t_popup('/"+self.app.memory.secure+"/afbeelding/'+itd);return false}")
+                        self.app.javascript(code="function afbeelding(itd){t_popup('/"+self.app.m.secure+"/afbeelding/'+itd);return false}")
                         self.app.javascript(code="function sluit(){$('#m_popup').fadeOut()}")
+                        self.app.javascript(code="function leegafbeelding(itd){$('#'+itd).val('')}")
                         self.plaatje = True
 
                     self.app.javascript(code="$('#"+str(tid)+"').click(function(){afbeelding('"+str(tid)+"')})")
+                    self.app.javascript(code="$('#ll"+str(tid)+"').click(function(){leegafbeelding('"+str(tid)+"')})")
+                    invoer = invoer.replace('{opt}', '{opt} style="width:95%"')
                     invoer = invoer.replace('{type}', 'text')
+                    invoer = invoer + '<span class="icon-times pointer btn btn-danger pull-right" id="{llrrr}"> </span>'
+                    invoer = invoer.replace('{llrrr}','ll'+str(tid))
                 if item.widget == 'alias':
                     invoer = invoer.replace('{type}', 'text')
                     if self.waarden:
                         self.waarden[tid] = alias(self.waarden[tid])
                 elif item.widget == 'join':
-                    invoer = '<select name="'+str(tid)+'" name="'+str(tid)+'"><option value="-1">---</option>'
+                    invoer = '<select name="'+str(tid)+'" id="'+str(tid)+'"><option value="-1">---</option>'
                     refer = item.type.split(' ')[1]
-                    p=self.app.db(self.app.db[refer]).select('id','naam')
-                    for x in p:
-                        wo = ''
-                        #wo = ' selected="selected"' if str(x['id']) == self.waarden[tid] else ''
-                        if self.waarden:
-                            wo = ' selected="selected"' if x['id'] == int(self.waarden[tid]) else ''
-                        invoer = invoer + '<option value="'+str(x['id'])+'"'+wo+'>'+str(x['naam'])+'</option>'
+                    try:
+                        p=self.app.db(self.app.db[refer]).select('id','naam')
+                        for x in p:
+                            wo = ''
+                            #wo = ' selected="selected"' if str(x['id']) == self.waarden[tid] else ''
+                            if self.waarden:
+                                try:
+                                    wo = ' selected="selected"' if x['id'] == int(self.waarden[tid]) else ''
+                                except:
+                                    pass
+                            invoer = invoer + '<option value="'+str(x['id'])+'"'+wo+'>'+str(x['naam'])+'</option>'
+                    except:
+                        p=self.app.db(self.app.db[refer]).select('id','firstname','lastname')
+                        for x in p:
+                            wo = ''
+                            #wo = ' selected="selected"' if str(x['id']) == self.waarden[tid] else ''
+                            if self.waarden:
+                                try:
+                                    wo = ' selected="selected"' if x['id'] == int(self.waarden[tid]) else ''
+                                except:
+                                    pass
+                            invoer = invoer + '<option value="'+str(x['id'])+'"'+wo+'>'+str(x['firstname'])+' '+str(x['lastname'])+'</option>'
+
                     invoer = invoer + '</select>'
                 else:
                     invoer = invoer.replace('{type}', str(item.widget))
             if item.widget in vorm_valid:
                 invoer = invoer.replace('{type}', vorm_valid[item.widget])
+            if item.type == 'datetime':
+                invoer = invoer.replace('{type}', 'datetime-local')
+                #self.app.javascript(include="js/invoerhelper.js")
+            if item.type == 'date':
+                invoer = invoer.replace('{type}', 'date')
+                #self.app.javascript(include="js/invoerhelper.js")
+            if item.type == 'time':
+                invoer = invoer.replace('{type}', 'time')
+                #self.app.javascript(include="js/invoerhelper.js")
             if item.type == 'upload':
                 self.fileupload = True
                 invoer = invoer.replace('{type}', 'file')
@@ -203,12 +261,12 @@ class Vorm:
             if item.wysiwyg:
                 #hopsakeee
                 if self.javascript == False:
-                    self.app.javascript(include='/static/editor/ckeditor.js')
+                    self.app.javascript(include='/'+self.app.m.settings.media_folder+'/editor/ckeditor.js')
                     #is gebruiker op be[aa;d niveau] dan mag ie uploaden
                     #anders beperkt
-                    self.app.javascript(code='CKEDITOR.config.filebrowserBrowseUrl = "/'+self.app.memory.secure+'/ckbrowser/files";')
-                    self.app.javascript(code='CKEDITOR.config.filebrowserImageBrowseUrl = "/'+self.app.memory.secure+'/ckbrowser/images";')
-                    self.app.javascript(code='CKEDITOR.config.filebrowserFlashBrowseUrl = "/'+self.app.memory.secure+'/ckbrowser/flash";')
+                    self.app.javascript(code='CKEDITOR.config.filebrowserBrowseUrl = "/'+self.app.m.secure+'/ckbrowser/files";')
+                    self.app.javascript(code='CKEDITOR.config.filebrowserImageBrowseUrl = "/'+self.app.m.secure+'/ckbrowser/images";')
+                    self.app.javascript(code='CKEDITOR.config.filebrowserFlashBrowseUrl = "/'+self.app.m.secure+'/ckbrowser/flash";')
                     self.javascipt = True
                 self.app.javascript(code='CKEDITOR.replace( "'+ tid +'" );')
 
@@ -247,35 +305,48 @@ class Vorm:
     def show(self):
         return self.form
 
+    def form_show(self):
+        return '<form method="post" action="#" autocomplete="off"><fieldset>'+self.form+'</fieldset><button type="submit">opslaan</button>'
+
     def form_id(self):
+        dcsrf = self.form_csrftoken()
         if self.id > 0:
-            return '<input type="hidden" name="id" value="'\
+            if self.app.isadmin:
+                #admin's
+                return dcsrf+'<input type="hidden" class="xx" name="id" value="'\
                                                         + str(self.id) + '" />'
+            else:
+                return dcsrf
         else:
-            return ''
+            return dcsrf+''
 
     def delete(self):
         if self.id > 0:
             try:
                 del self.table[self.id]
+                P = self.auth.add_audit(bericht= 'Verwijderde id '+str(self.id)+'  van de tabel ' + str(self.table) )
+
             except:
                 pass
 
     def save(self, post=False, save=True):
-        if post:
+        if post and post['csrftoken'] == self.post_token:
 
             #check for CSRF token
             #check for referer
 
             #check for valid user
-
+            verwerkt = 'Voegde toe aan '
 
             for k in self.postkey:
                 if not k == 'id':
                     if k in post:
                         if k in self.valideer:
                             if self.valideer[k] == 'alias':
-                                self.opslaan[k] = alias(post[k])
+                                talias = post[k]
+                                for x in self.app.m.settings.blacklist:
+                                    talias = talias.replace(x, '')
+                                self.opslaan[k] = alias(talias)
                             elif vorm_validate(self.valideer[k], post[k]):
                                 if self.valideer[k] != 'alias':
                                     self.opslaan[k] = post[k]
@@ -283,23 +354,22 @@ class Vorm:
                                 return False
                         self.opslaan[k] = post[k]
                 else:
-                    if k == 'id' and post['id']:
+                    if self.app.addmin and k == 'id' and post['id']:
                         self.id = post[k]
+                        verwerkt=' Bewerkte id ' + str(self.id)+' van '+str(self.table)
             if save:
                 self.table[self.id] = self.opslaan
-                self.form = ''
+                self.form = self.tokenref
                 self.postkey = []
                 self.opslaan = {}
                 self.widget = {}
                 self.valideer = {}
-                self.create_form()
-                if self.id:
-                    self.app.audit_trail(1,'Verwerkte tabel '+str(self.table)+' met id:' + str(self.id))
-                else:
-                    self.app.audit_trail(1,'Voegde een nieuw onderdeel aan tabel '+str(self.table)+' toe')
+                
+
                 #audit trail
                 #datum, ip, gebruiker, aanpassingen, reden
-
+                P = self.auth.add_audit(bericht= verwerkt + ' de tabel ' + str(self.table) )
+                self.create_form()
             return True
 
         #audit trail
