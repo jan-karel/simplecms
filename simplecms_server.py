@@ -30,7 +30,6 @@ from simplecms.helpers import echo, serve_file, default_config, HTML, \
 from simplecms.dal import BaseAdapter, DAL, Field
 from simplecms.vorm import vorm_validate, Vorm
 from simplecms.grid import Grid
-import simplecms.browserparser as httpagent
 from wsgiref import simple_server
 import traceback
 
