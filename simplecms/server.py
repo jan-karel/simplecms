@@ -195,7 +195,6 @@ class Simplecms:
             self.status = '200 ok'
             self.field = False
             self.route = False
-            self.stats = False
             self.protocol = False
             self.javascript_inc = []
             self.javascript_file = []
@@ -375,9 +374,6 @@ class Simplecms:
 
         oldauthkey = oldkey.hexdigest()
         authkey = userkey.hexdigest()
-
-
-        #self.stats = httpagent.detect(environ.get('HTTP_USER_AGENT'))
         
         self.cookie = _(authkey[0:16])
         oldcookie = _(oldauthkey[0:16])
@@ -729,12 +725,15 @@ class Simplecms:
 
         """
 
-        if self.r.arg(0) and self.r.arg(0) == self.m.secure:
-            """
-            Auth is required to load
+        if self.loggedin and self.r.arg(0) in ['logout','uitloggen']:
+            auth=self.model('base_auth')
+            auth.user_logout(ret=True)
+            return [self.status, self.headers, 'redirect']
 
-            """
-            
+
+
+        if self.r.arg(0) and self.r.arg(0) == self.m.secure:
+
             
             aanvraag = self.r.arg(1)
             functie = self.r.arg(2)
@@ -749,10 +748,6 @@ class Simplecms:
                 data = self.view( memory.base_template + '/login/setup_login.html')
 
                 return [self.status, self.headers, data]
-            if aanvraag in ['logout','uitloggen']:
-                auth=self.model('base_auth')
-                auth.user_logout(ret=True)
-                return [self.status, self.headers, 'redirect']
 
             items = []
             for x in self.m.settings.backend_modules:
@@ -952,7 +947,8 @@ class Simplecms:
         ads requested javascript to the page
 
         """
-        zetscripts = "img-src {prot}://* data: blob: ; connect-src {prot}://*; media-src {prot}://* ; object-src {prot}://{domein}/static/ ; default-src 'self' ; font-src {prot}://* data: ; frame-src {prot}://* ; style-src {prot}://* 'unsafe-inline' 'unsafe-eval' ; script-src 'unsafe-eval' 'unsafe-inline' 'self' {prot}://{domein}/ 'nonce-{nonce}' ;"
+        #zetscripts = "img-src {prot}://* data: blob: ; connect-src {prot}://*; media-src {prot}://* ; object-src {prot}://{domein}/static/ ; default-src 'self' ; font-src {prot}://* data: ; frame-src {prot}://* ; style-src {prot}://* 'unsafe-inline' 'unsafe-eval' ; script-src 'unsafe-eval' 'unsafe-inline' 'self' {prot}://{domein}/ 'nonce-{nonce}' ;"
+        zetscripts = "default-src 'self'; script-src 'self' 'nonce-{nonce}'; frame-ancestors 'self';"
         altscripts = "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-src 'self';"
 
         e = ''
@@ -961,7 +957,7 @@ class Simplecms:
         if code == 'show':
 
             nonce = self.csp.capitalize()
-            cked = '/'+self.m.settings.media_folder+'/editor/ckeditor.js'
+            cked = '/'+self.m.settings.media_folder+'/editor/editor.js'
             if cked in self.javascript_file:
                 #relaxes csp header
                 self.headers.append(('Content-Security-Policy', altscripts))
