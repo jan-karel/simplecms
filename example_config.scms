@@ -83,6 +83,9 @@
 #dbmedia_folder / images in database
 'dbmedia_folder': 'media',
 
+#secure_folder
+'secure_folder': 'projecten',
+
 #email settings
 #connect with a database
 'mailserver': 'localhost:25',

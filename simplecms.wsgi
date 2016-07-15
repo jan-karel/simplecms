@@ -24,7 +24,7 @@ path = os.path.dirname(os.path.abspath(__file__))
 os.chdir(path)  
 sys.path = [path] + [p for p in sys.path if not p == path]  
     
-import simplecms_server
+import simplecms.server
 
 def application(environ, start_response):
     return simplecms_server.server(environ, start_response)
