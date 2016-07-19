@@ -19,6 +19,7 @@
 import os
 import sys
 import gc
+import __main__
 import hashlib
 import datetime
 import string
@@ -37,7 +38,7 @@ func = False
 app = False
 
 __autor__ = "Jan-Karel Visser"
-__version__ = '0.1'
+__version__ = '0.2'
 __release__ = '0'
 __license__ = 'LGPLv3'
 
@@ -266,7 +267,8 @@ class Simplecms:
     def model(self, name=False, path='models', cdn=False, blanc_env=False, 
               func=False):
         """
-        The database and logic
+        Database modellen en logica
+        geeft een database model terug of None
 
         """
         if not hasattr(self.db, '_tables'):
@@ -276,8 +278,14 @@ class Simplecms:
 
         if not blanc_env:
             blanc_env = self.environment()
-        
-        q_model = self.load_class(name, path, blanc_env, func)
+
+        if name in ['base_tickets','base_auth','base_media','base_meuk']:
+            #change
+            forcepath = self.m.localfolder
+            q_model = self.load_class(name, path, blanc_env, func, forcepath)
+
+        else:
+            q_model = self.load_class(name, path, blanc_env, func)
 
         if hasattr(q_model, 'create_models'):
             q_model.create_models()
@@ -575,11 +583,13 @@ class Simplecms:
         Fetches the raw HTML temlate from the given directory
 
         """
+        #basic templates
+
         if not getfile:
             getfile = self.apppath + '/views/' + str(view)
         else:
             getfile = getfile.replace('.', '') + '/views/' + str(view)
-        return serve_file(getfile)
+        return serve_file([getfile, self.m.localfolder+'/simplecms/views/'+ str(view))
 
     def view(self, view, **zargs):
         """
@@ -657,7 +667,11 @@ class Simplecms:
         if not module:
             # get the first request
             module = self.m.settings.modules[self.r.args[0]]
-        q = self.load_class(module, blanc_env=self.environment())
+
+        if module in ['cms']:
+            q = self.load_class(module, blanc_env=self.environment(), forcepath=self.m.localfolder+'/simplecms/')
+        else:
+            q = self.load_class(module, blanc_env=self.environment())
 
 
         if hasattr(q, module.title()) or hasattr(q, '_run'):
@@ -1112,8 +1126,8 @@ def server(environ, start_response):
     if ip in memory.vuurmuur and memory.vuurmuur[ip] >= 8:
         #to many errors from this ip, idiot filter not implemented
         status = '501 Not Implemented'
-        pad = memory.folder + '/' + memory.appfolder + '/views/' + memory.base_template \
-            + '/http/blocked.html'
+        pad = [memory.folder + '/' + memory.appfolder + '/views/' + memory.base_template \
+            + '/http/blocked.html', memory.localfolder + '/simplecms/views/base/http/307.html']
         output = serve_file(pad)
         start_response(status, [('Content-type', 'text/html')])
 
@@ -1128,19 +1142,23 @@ def server(environ, start_response):
             memory.vuurmuur.update({ip: 1})
         
         status = '403 forbidden'
-        output = serve_file(memory.folder + '/' + memory.appfolder + '/views/' \
-                            + memory.base_template + '/http/403.html')
+        output = serve_file([memory.folder + '/' + memory.appfolder + '/views/' \
+                            + memory.base_template + '/http/403.html',
+                            memory.localfolder + '/simplecms/views/base/http/307.html']
+                            )
         start_response(status, [('Content-type', 'text/html')])
         return [_(output)]
     else:
         try:
             # static requests
             if uri.lower() in ['/favicon.ico', '/robots.txt', '/humans.txt']:
-                output = serve_file(memory.folder + '/' + 'static' + uri)
+                output = serve_file([memory.folder + '/' + memory.settings.media_folder + uri,
+                                    memory.localfolder + '/simplecms/static'+ uri]
+                                    )
                 
             elif uri.startswith('/' + memory.settings.media_folder + '/'):
                 bst = uri.replace('/' + memory.settings.media_folder + '/', '')
-                output = serve_file(memory.folder + '/' + memory.settings.media_folder + '/' + str(bst))
+                output = serve_file([memory.folder + '/' + memory.settings.media_folder + '/' + str(bst),memory.localfolder+'/simplecms/static/'+str(bst)])
             # output    directly + cache
 
             else:
@@ -1174,11 +1192,14 @@ def server(environ, start_response):
     if output == '404':
         status = '404 not found'
         ext = 'text/html'
-        output = serve_file(memory.folder + '/' + memory.appfolder \
-                    + '/views/' + memory.base_template + '/http/404.html')
+        output = serve_file([memory.folder + '/' + memory.appfolder \
+                    + '/views/' + memory.base_template + '/http/404.html',
+                    memory.localfolder+ '/views/base/http/404.html'])
     elif output == 'redirect':
-        output = serve_file(memory.folder + '/' + memory.appfolder \
-                    + '/views/' + memory.base_template + '/http/307.html')
+        output = serve_file([memory.folder + '/' + memory.appfolder \
+                    + '/views/' + memory.base_template + '/http/307.html',
+                    memory.localfolder + '/views/base/http/307.html']
+                    )
 
     if not response_headers:
         req = ext.split('/')
@@ -1206,14 +1227,23 @@ def _(s, enc='utf8', err='strict'):
         return bytes(s.encode(enc))
 
 
+
 def get_folder():
-    p = __file__.split('simplecms_server')
+    p = __main__.__file__
+    folder = os.path.abspath(p).rsplit('/',1)[0]
+    sys.path.append(folder)
+    return folder
+
+def get_myfolder():
+    p = __file__.split('simplecms/server')
     folder = os.path.abspath(p[0])
     sys.path.append(folder)
     return folder
 
 
+
 memory = Memory()
+memory.localfolder = get_myfolder()
 memory.folder = get_folder()
 # enforce the local default path
 
@@ -1246,5 +1276,5 @@ def startserver(port=memory.settings.port, hostname=memory.settings.hostname):
     httpd.set_app(server)
     httpd.serve_forever()
 
-if __name__ == '__main__':
-    startserver()
+#if __name__ == '__main__':
+#    startserver()

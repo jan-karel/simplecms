@@ -109,7 +109,7 @@ EXT_TYPE = {
     }
 
 config = {
-    'version': '0.1',
+    'version': '1.0',
     'release': 'preview',
     'hostname': '',
     'port': 8888,
@@ -263,9 +263,25 @@ def echo(message, replacements=False, ret=True):
 
 
 def serve_file(e):
+    if isinstance(e, list):
+        for x in e:
+            print x
+            d = get_file(x)
+            print d
+            if d != '404':
+                print 'niet 404'
+                return d
+        return '404'        
+    else:
+        return get_file(e)
+
+def get_file(e):        
     e = e.replace('//', '/')
     e = e.replace(';', '')
+    e = e.replace('|', '') 
+    e = e.replace(':', '')
     e = e.replace('..', '')
+    print 'link is:'+e
     try:
         file = open(e, 'rb')
         item = file.read()
